@@ -1,0 +1,7 @@
+matplotlib
+numpy
+scipy
+theano
+tabulate
+scikit-learn
+pandas

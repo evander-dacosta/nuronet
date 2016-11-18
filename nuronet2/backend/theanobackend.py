@@ -32,6 +32,8 @@ class TheanoBackend(Backend):
             dtype = self._default_dtype
         broadcast = (False, ) * ndim
         ret = T.TensorType(dtype=dtype, broadcastable=broadcast)(name)
+        ret._shape = tuple([None for _ in range(ndim)])
+        ret._history = None
         return ret
         
     def scalar(self, dtype=None, name=None):

@@ -13,7 +13,7 @@ import numpy.random
 
 from utils.mnistLoad import load_data
 from densedataset import DenseDataset
-from backend import N
+from nuronet2.backend import N
 
 
 def mnistLoader(fName, limit=None):

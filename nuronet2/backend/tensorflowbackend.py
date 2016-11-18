@@ -150,9 +150,11 @@ class TensorflowBackend(Backend):
                     'to Nuronet with N.set_session(session)')
         return v        
         
-    def variable(self, ndim=None, dtype=None, name=None):
+    def variable(self, ndim, dtype=None, name=None):
         shape = tuple([None for _ in range(ndim)])
         x = tf.placeholder(dtype=_str_dtype(dtype), shape=shape, name=name)
+        x._shape = shape
+        x._history = None
         return x
         
     def scalar(self, dtype=None, name=None):
@@ -173,7 +175,7 @@ class TensorflowBackend(Backend):
     def shape(self, x):
         return tf.shape(x)
         
-    def tf_shape(self, x):
+    def int_shape(self, x):
         """
         Returns the shape of a tensor as a tuple of ints
         or None entries. Works only with Tensorflow

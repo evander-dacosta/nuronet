@@ -13,6 +13,7 @@ Created on Fri Apr 15 10:32:03 2016
 """
 
 import numpy
+from collections import defaultdict
 
 class Backend(object):
     """
@@ -30,6 +31,18 @@ class Backend(object):
         self._rng_seed = rng_seed
         self.rng = self.createRNG(rng_seed)
         self._epsilon = 1e-7
+        self.floatx = 'float32'
+        self.uid_object = defaultdict(int)
+        
+    def get_uid(self, prefix=''):
+        self.uid_object[prefix] += 1
+        return self.uid_object[prefix]
+        
+    def reset_uids(self):
+        self.uid_object = defaultdict(int)
+        
+    def floatx(self):
+        return self.floatx
         
     @property
     def default_dtype(self):

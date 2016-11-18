@@ -4,96 +4,104 @@ Created on Thu Nov 17 00:36:57 2016
 
 @author: evander
 """
-from collections import OrderedDict
-from nuronet2.base import MLModel
-from backend import N
 
-class Layer(MLModel):
-    def __init__(self, input_shape, name=None):
-        MLModel.__init__(self, input_shape=input_shape, name=name)
+from nuronet2.base import  MLModel, InputDetail, MLConnection
+from nuronet2.activations import get_activation
+from nuronet2.base import get_weightfactory, get_regulariser
+from nuronet2.backend import N
+
+class InputLayer(MLModel):
+    def __init__(self, input_shape, input_dtype=N.floatx, input_tensor=None,
+                 name=None):
+        if(input_tensor is None):
+            input_tensor = N.variable(ndim=len((input_shape)) + 1
+                                ,dtype=input_dtype, name=name)
+            input_tensor._shape = (None, input_shape[0])
+        else:
+            input_shape = input_tensor._shape
+        input_tensor._history = (self, 0, 0)
+        MLModel.__init__(self, input_shape=input_shape, input_dtype=input_dtype,
+                         name=name)
+        MLConnection(self, inbound_models=[], connection_indices=[],
+                     tensor_indices=[], input_tensors=[input_tensor],
+                    output_tensors=[input_tensor], input_shapes=[self.input_shape],
+                    output_shapes=[self.input_shape])
+                    
+    def build(self, input_shape):
+        self.is_built = True
         
-    def set_params(self, params):
-        if(not isinstance(params, (list, tuple))):
-            raise Exception("Parameters set to a layer must be list/tuple")
-        currentParams = self.get_params()
-        for oldParam, newParam in zip(currentParams, params):
-            oldShape = N.get_value(oldParam).shape#oldParam.get_value().shape
-            newShape = newParam.shape
-            oldShapes = 'x'.join(map(str, oldShape))
-            newShapes = 'x'.join(map(str, newShape))
-            
-            if(oldShapes == newShapes):
-                N.set_value(oldParam, newParam.astype('float32'))
-            else:
-                raise Exception("Mismatching shapes for current layer:" + \
-                " meant to be {}, given {}".format(oldShapes, newShapes))
-                
-    #To be Implemented
-    def prop_up(self, *args, **kwargs):
-        raise NotImplementedError()
-        
-    def build(self, *args, **kwargs):
-        raise NotImplementedError()
-        
-    def get_cost(self):
-        raise NotImplementedError()
-        
-    def get_params(self):
-        raise NotImplementedError()
-        
-    def get_output_shape(self):
-        raise NotImplementedError()
-        
-    def get_updates(self):
-        """
-        Return custom updates
-        """
-        return OrderedDict()
-                
-                
-                
-class InputLayer(Layer):
-    def __init__(self, n, input_shape=None, name=None):
-        #regular inputs
-        if(isinstance(n, int)):
-            input_shape = (None, n) if input_shape is None else input_shape
-            n = (n,)
-            
-        #convolutional inputs always specified as (n_channels, n_rows, n_cols)
-        elif(isinstance(n, (list, tuple))):
-            n = tuple(n)
-            if(n[0] is None):
-                n = n[1:]
-            if(input_shape is None):
-                input_shape=[input_shape]
-                input_shape.extend(n)
-            input_shape = tuple(input_shape)
-        
-        if(not tuple(input_shape[1:]) == n):
-            raise Exception("Input shape is mismatched with n." + \
-                    "Given n:{}. Given input_shape:{}".format(n, input_shape))
-        self.n = n
-        Layer.__init__(self, input_shape=input_shape, name=name)
-        self.build()
-        
-    def prop_up(self, state):
-        print "{}'s prop_up called".format(self.name)
-        return state        
-        
-    def build(self, *args, **kwargs):
-        self._is_built = True
+    def prop_up(self, x):
+        return x
         
     def get_cost(self):
         return N.cast(0.)
         
-    def get_params(self):
-        return []
+    def get_output_shape(self, input_shape):
+        return input_shape
         
-    def get_output_shape(self):        
-        return self.input_shape
-                
-                
+
+            
+def Input(shape=None, name=None, dtype=N.floatx,
+                      tensor=None):
+    """Used to instantiate a Nuronet tensor that is augmented with
+    _shape and _history attributes.
+    
+    These attributes allow us to build models by just specifying the input
+    and output tensors without the underlying model/layer connections.
+    """
+    input_layer = InputLayer(input_shape=tuple(shape),
+                             name=name, input_dtype=dtype,
+                             input_tensor=tensor)
+    outputs = input_layer.inbound_connections[0].output_tensors
+    if(len(outputs) == 1):
+        return outputs[0]
+    else:
+        return outputs
+        
+        
+class DenseLayer(MLModel):
+    def __init__(self, n, weight_factory='xavier_uniform',
+                 activation='linear', weights=None, w_regulariser=None,
+                 b_regulariser=None, input_shape=None, **kwargs):
+        self.weightFactory = get_weightfactory(weight_factory)
+        self.activation = get_activation(activation)
+        self.w_regulariser = get_regulariser(w_regulariser)
+        self.b_regulariser = get_regulariser(b_regulariser)
+        
+        self.n = n
+        self.input_details = [InputDetail(ndim=2)]
+        if(input_shape is not None):
+            kwargs['input_shape'] = input_shape
+        MLModel.__init__(self, **kwargs)
+        
+    def build(self, input_shape):
+        assert(len(input_shape) == 2)
+        input_dim = input_shape[1]
+        self.input_details = [InputDetail(dtype=N.floatx, shape=(None, input_dim))]
+        self.W = self.weightFactory(shape=(input_shape[-1], self.n))
+        self.b = N.zeros(shape=(self.n,))
+        self.trainable_weights = [self.W, self.b]
+        self._is_built = True
+        
+    def prop_up(self, x):
+        return self.activation(N.dot(x, self.W) + self.b)
+    
+    def get_cost(self):
+        w_cost =  self.w_regulariser(self.W) if self.w_regulariser else N.cast(0.)
+        b_cost = self.b_regulariser(self.b) if self.b_regulariser else N.cast(0.)
+        return w_cost + b_cost
+            
+    def get_output_shape(self, input_shape):
+        assert input_shape and len(input_shape) == 2
+        return (input_shape[0], self.n)
+            
+            
+        
+    
+        
+        
 if __name__ == "__main__":
-    x = InputLayer(2, input_shape=(None, 2), name='x')
-    y = InputLayer(2, input_shape=(None, 2), name='y')
-    a = x(y)
+    a = Input((3,), name="a")
+    b = DenseLayer(2)
+    y = b(a)
+    f = N.function([a], y)

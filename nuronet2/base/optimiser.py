@@ -1,18 +1,12 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Nov 17 00:07:10 2016
-
-@author: evander
-"""
 
 import numpy
 import matplotlib.pyplot as plt
 from time import time
 from tabulate import tabulate
 from collections import OrderedDict
-from backend import N
-from mlmodel import MLModel
-from objectives import get_objective
+from nuronet2.backend import N
+from nuronet2.base import MLModel
+from nuronet2.objectives import get_objective
 
 
 class TrainingLog:
@@ -46,7 +40,7 @@ class TrainingLog:
         
 
 class Optimiser(object):
-    def __init__(self, model, objective):
+    def __init__(self, model, objectives):
         self._train_history = []
         self._current_epoch = 0
         self._i = N.scalar(dtype='int32', name='i')
@@ -57,10 +51,13 @@ class Optimiser(object):
         self._dataset = None
         self.nEpochs = 0
         
+        #set the model and the loss functions
         self.set_model(model)
-        ##########################################
-        self._objective = get_objective(objective)
-        ##########################################
+        self.set_objectives(objectives)
+        
+    @property
+    def model(self):
+        return self._model
         
     @property
     def learning_rate(self):
@@ -154,29 +151,69 @@ class Optimiser(object):
         if(not isinstance(model, MLModel)):
             raise Exception("Unknown model type")
         self._model = model
+        if(not self._model.is_built):
+            self._model.build()
         
+
+    def set_objectives(self, objectives):
+        """Can set multiple objectives with a list of objectives
+        corresponding to the list of output tensors
+        """
+        if(isinstance(objectives, list)):
+            if(len(objectives) != len(self.model.outputs)):
+                raise Exception("When passing a list of objective functions, " + \
+                                "it should have one entry per output tensor of " + \
+                                "the model. The current model has {} tensors ".format(len(self.model.outputs)) + \
+                                "whereas the number of objectives passed is {}.".format(len(objectives)))
+            objective_functions = [get_objective(objective) for objective in objectives]
+            
+        else:
+            obj_fun = get_objective(objectives)
+            objective_functions = [obj_fun for _ in range(len(self.model.outputs))]
+        self.objective_fuctions = objective_functions
+
+    def compile(self):
+        self.targets = []
+        #prepare targets
+        for tensor in self.model.outputs:
+            ndim = len(tensor._shape)
+            name = tensor.name
+            dtype = N.dtype(tensor)
+            self.targets.append(N.variable(ndim=ndim, dtype=dtype, name=name))
+        
+        #compute total loss
+        total_loss = None
+        for i in range(len(self.model.outputs)):
+            y_target = self.targets[i]
+            y_pred = self.model.outputs[i]
+            if(total_loss is None):
+                total_loss = self.objective_fuctions[i](y_target, y_pred)
+            else:
+                total_loss += self.objective_fuctions[i](y_target, y_pred)
+        #add individual layer losses like regularisers
+        total_loss += self.model.get_cost()
+        self.total_loss = total_loss
+    #TBI
+
+        
+
     def get_train_valid_funcs(self):
-        if(self._model is None):
-            raise Exception("Model not set for current optimiser")
-        main_cost = self._objective(self._model.output, self._model.prop_up())
-        side_costs = self._model.get_cost()
-        total_cost = main_cost + side_costs
+        inputs = self.model.inputs + self.targets
         
-        params = self._model.get_params()
-        updates = self.get_updates(total_cost, params).items()
-        updates += self._model.get_updates()
-        inputs = [self._model.input]
-        if(self._model.supervised):
-            inputs += [self._model.output]
-        train_func = N.function(inputs, outputs=[total_cost],
-                                updates=updates)
-        valid_func = N.function(inputs, outputs=[total_cost])
+        updates = self.get_updates(self.total_loss, self.model.trainable_weights).items()
+        updates += self.model.get_updates().items()
         
-        return train_func, valid_func
+        train_function = N.function(inputs, [self.total_loss], updates=updates)
+        valid_function = N.function(inputs, [self.total_loss], updates=updates)
+        return train_function, valid_function
         
+    def fit(self, dataset, n_epochs):
+        self.dataset = dataset
+        self.reset()
+        self.set_num_epochs(n_epochs)
+        self.compile()
         
-    def trainLoop(self, dataset):
-        trainFunction, validFunction = self.get_train_valid_funcs()
+        train_function, valid_function = self.get_train_valid_funcs()
         bestTrainLoss = numpy.inf
         bestValidLoss = numpy.inf
 
@@ -186,12 +223,10 @@ class Optimiser(object):
             t0 = time()
 
             for Xb, Yb in dataset(XTrain, YTrain):
-                trainLoss = trainFunction(
-                    Xb) if not self._model.supervised else trainFunction(Xb, Yb)
+                trainLoss = train_function(Xb, Yb)
                 trainLosses += trainLoss
 
-            validLoss = validFunction(
-                    XValid) if not self._model.supervised else validFunction(XValid, YValid)
+            validLoss = valid_function(XValid, YValid)
 
             t1 = time()
 
@@ -212,32 +247,6 @@ class Optimiser(object):
             self.add_to_history(epochInfo)
             self.increment_epoch()
             self.end_of_epoch()
-            
-    def fit(self, dataset, nEpochs):
-        if(not self.model.is_built):
-            self.model.build()
-        self.dataset = dataset
-        self.set_model_input_output(self.model, self.dataset)
-        self.reset()
-        self.set_num_epochs(nEpochs)
-        self.trainLoop(dataset)
         
-    def set_model_input_output(self, model, dataset):
-        """
-        Sets the models input and output to match
-        the dataset's input and output
-        """
-        model.input = N.variable(ndim=dataset.X.ndim,
-                                       dtype=dataset.X.dtype)
-        if(hasattr(dataset, 'Y')):
-            output_dtype = dataset.Y.dtype
-        else:
-            output_dtype = 'float32'
-        model.output = N.variable(ndim=len(model.output_shape),
-                                        dtype=output_dtype)
-
     def get_updates(self, cost, params):
-        """
-        TODO:DOC
-        """
         raise NotImplementedError()

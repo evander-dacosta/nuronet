@@ -8,7 +8,7 @@ Created on Tue Apr 19 09:06:38 2016
 import numpy
 import types
 import inspect
-from backend import N, get_from_module
+from nuronet2.backend import N, get_from_module
 
 
 def get_objective(name):
@@ -19,8 +19,7 @@ def get_objective(name):
             raise Exception("A function was passed to get_objective, but " + \
                             "wasn't the right format to be an objective." + \
                             "Define objective functions as func(target, output)")
-        objective = Objective()
-        objective.get_error = name
+        objective = CustomObjective(name)
         return objective
         
     #elif(isinstance(name, type) and isinstance(name(), Objective)):
@@ -50,7 +49,6 @@ def categorical_crossentropy():
     
 def binary_crossentropy():
     return BinaryXEntropy()
-    
 
 class Objective(object):
     def get_error(self, target, output):
@@ -58,6 +56,10 @@ class Objective(object):
         
     def __call__(self, target, output):
         return self.get_error(target, output)
+        
+class CustomObjective(Objective):
+    def __init__(self, function):
+        self.get_error = function
         
         
 class MSE(Objective):

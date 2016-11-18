@@ -6,7 +6,7 @@ Created on Wed Apr 20 09:26:31 2016
 """
 
 import numpy
-from backend import N
+from nuronet2.backend import N
 from densedataset import DenseDataset
 
 
