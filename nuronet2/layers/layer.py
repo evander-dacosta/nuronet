@@ -16,10 +16,10 @@ class InputLayer(MLModel):
         if(input_tensor is None):
             input_tensor = N.variable(ndim=len((input_shape)) + 1
                                 ,dtype=input_dtype, name=name)
-            input_tensor._shape = (None, input_shape[0])
+            input_tensor._nuro_shape = (None, input_shape[0])
         else:
             input_shape = input_tensor._shape
-        input_tensor._history = (self, 0, 0)
+        input_tensor._nuro_history = (self, 0, 0)
         MLModel.__init__(self, input_shape=input_shape, input_dtype=input_dtype,
                          name=name)
         MLConnection(self, inbound_models=[], connection_indices=[],
@@ -44,7 +44,7 @@ class InputLayer(MLModel):
 def Input(shape=None, name=None, dtype=N.floatx,
                       tensor=None):
     """Used to instantiate a Nuronet tensor that is augmented with
-    _shape and _history attributes.
+    _nuro_shape and _nuro_history attributes.
     
     These attributes allow us to build models by just specifying the input
     and output tensors without the underlying model/layer connections.

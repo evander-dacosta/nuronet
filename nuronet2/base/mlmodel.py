@@ -128,8 +128,8 @@ class MLConnection(object):
                             " per output tensor of the layer.")
                             
         for i in range(len(output_tensors)):
-            output_tensors[i]._shape = output_shapes[i]
-            output_tensors[i]._history = (outbound_model, len(outbound_model.inbound_connections), i)
+            output_tensors[i]._nuro_shape = output_shapes[i]
+            output_tensors[i]._nuro_history = (outbound_model, len(outbound_model.inbound_connections), i)
             
         return cls(outbound_model, inbound_models, connection_indices,
                    tensor_indices, input_tensors, output_tensors, input_shapes,
@@ -172,8 +172,8 @@ class MLModel(object):
         if(not self.is_built):
             input_shapes = []
             for elem in make_list(x):
-                if(hasattr(elem, '_shape')):
-                    input_shapes.append(elem._shape)
+                if(hasattr(elem, '_nuro_shape')):
+                    input_shapes.append(elem._nuro_shape)
                 elif(hasattr(N, 'int_shape')):
                     input_shapes.append(N.int_shape(elem))
                 else:
@@ -190,8 +190,8 @@ class MLModel(object):
         connection_indices = []
         tensor_indices = []
         for input_tensor in input_tensors:
-            if(hasattr(input_tensor, '_history') and input_tensor._history):
-                previous_model, connection_index, tensor_index = input_tensor._history
+            if(hasattr(input_tensor, '_nuro_history') and input_tensor._nuro_history):
+                previous_model, connection_index, tensor_index = input_tensor._nuro_history
                 inbound_models.append(previous_model)
                 connection_indices.append(connection_index)
                 tensor_indices.append(tensor_index)

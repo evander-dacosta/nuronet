@@ -176,10 +176,10 @@ class Optimiser(object):
         self.targets = []
         #prepare targets
         for tensor in self.model.outputs:
-            ndim = len(tensor._shape)
+            ndim = len(tensor._nuro_shape)
             name = tensor.name
             dtype = N.dtype(tensor)
-            self.targets.append(N.variable(ndim=ndim, dtype=dtype, name=name))
+            self.targets.append(N.variable(ndim=ndim, dtype=dtype))
         
         #compute total loss
         total_loss = None

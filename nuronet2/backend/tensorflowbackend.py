@@ -153,8 +153,8 @@ class TensorflowBackend(Backend):
     def variable(self, ndim, dtype=None, name=None):
         shape = tuple([None for _ in range(ndim)])
         x = tf.placeholder(dtype=_str_dtype(dtype), shape=shape, name=name)
-        x._shape = shape
-        x._history = None
+        x._nuro_shape = shape
+        x._nuro_history = None
         return x
         
     def scalar(self, dtype=None, name=None):

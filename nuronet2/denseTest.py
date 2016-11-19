@@ -11,8 +11,7 @@ from nuronet2.optimisers import *
 from nuronet2.dataset.iris import IrisDataset
 
 
-from nuronet2.base import MLModel
-from test import AcyclicModel
+from nuronet2.base import MLModel, NetworkModel
         
 
 if __name__ == "__main__":
@@ -24,9 +23,9 @@ if __name__ == "__main__":
     
     out = layer3(layer2(layer1))
     
-    model = AcyclicModel(layer1, out)
+    model = NetworkModel(layer1, out)
     
     optim = Adam(model, ["categorical_crossentropy"])
     optim.fit(data, 20)
-    print numpy.argmax(n.predict(data.XTest), axis=1)
+    print numpy.argmax(model.predict(data.XTest), axis=1)
     print data.YTest.nonzero()[1]
