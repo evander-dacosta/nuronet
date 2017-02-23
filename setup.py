@@ -17,7 +17,8 @@ install_requires = [
     'theano',
     'tabulate',
     'scikit-learn',
-    'pandas'
+    'pandas',
+    'h5py'
     ]
 
 tests_require = [

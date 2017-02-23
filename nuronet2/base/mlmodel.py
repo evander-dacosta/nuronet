@@ -20,6 +20,12 @@ class InputDetail(object):
     """Specifies the ndim, dtype, and shape of every input to an MLModel.
     Every MLModel should expose an input_details attribute: A list of 
     InputDetail objects, one for every input
+    
+    Inputs
+    ------
+        @param ndim (optional) : The number of dimensions in the input tensor
+        @param dtype : The input's data type
+        @param shape (optional):
     """
     
     def __init__(self, ndim=None, dtype=None, shape=None):
@@ -42,22 +48,25 @@ class MLConnection(object):
     Everytime the output of an MLModel is used by another MLModel,
     a node is added to MLModel.outbound_connections
     
-    outbound_model: The model that takes 'input_tensors' and turns them into
-                    'output_tensors'
-    inbound_models: A list of models, with the same length as 'input_tensors',
-                    the models from which these tensors originate
-    connection_indices: A list of integers with the same length as 'inbound_models,
-                        connection_indices[i] is the origin connection of 
-                        'input_tensors[i]' (since each inbound_model might have
-                        multiple connections)
-    tensor_indices: A list of integers, with the same length as 'inbound_models',
-                    'tensor_indices[i]' is the index of 'input_tensors[i]',
-                    within the output of the inbound model (since inbound
-                    models might have multiple outputs)
-    input_tensors: A list of tensors
-    output_tensors: A list of output tensors
-    input_shapes: A list of input shape tuples
-    output_shapes: A list of output shape tuples
+    Inputs
+    ------
+    
+        @param outbound_model: The model that takes 'input_tensors' and turns them into
+                        'output_tensors'
+        @param inbound_models: A list of models, with the same length as 'input_tensors',
+                        the models from which these tensors originate
+        @param connection_indices: A list of integers with the same length as 'inbound_models,
+                            connection_indices[i] is the origin connection of 
+                            'input_tensors[i]' (since each inbound_model might have
+                            multiple connections)
+        @param tensor_indices: A list of integers, with the same length as 'inbound_models',
+                        'tensor_indices[i]' is the index of 'input_tensors[i]',
+                        within the output of the inbound model (since inbound
+                        models might have multiple outputs)
+        @param input_tensors: A list of tensors
+        @param output_tensors: A list of output tensors
+        @param input_shapes: A list of input shape tuples
+        @param output_shapes: A list of output shape tuples
     
     A connection from A to B is added to:
     A.outbound_connections
@@ -106,7 +115,8 @@ class MLConnection(object):
         input_tensors = []
         input_shapes = []
         
-        for inbound_model, connection_index, tensor_index in zip(inbound_models, connection_indices, tensor_indices):
+        for inbound_model, connection_index, tensor_index in \
+        zip(inbound_models, connection_indices, tensor_indices):
             inbound_connection = inbound_model.inbound_connections[connection_index]
             input_tensors.append(inbound_connection.output_tensors[tensor_index])
             input_shapes.append(inbound_connection.output_shapes[tensor_index])
@@ -147,6 +157,7 @@ class MLModel(object):
         self.non_trainable_weights = []
         self.is_built = False
         self.train_phase = True
+        self.is_training = False
         
         valid_kwargs = {'input_shape', 'input_dtype', 'name'}
         for kwarg in kwargs.keys():
@@ -163,6 +174,10 @@ class MLModel(object):
         else:
             self.input_shape = None
         self.input_dtype = kwargs.get('input_dtype')
+        
+    def set_training(self, value):
+        assert isinstance(value, bool), "set_training requires True/False arg"
+        self.is_training = value
         
     @property
     def weights(self):

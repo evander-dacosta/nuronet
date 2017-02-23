@@ -35,6 +35,10 @@ def relu(x, alpha=0., max_value=None):
 def tanh(x):
     return N.tanh(x)
     
+def tanh2(x):
+    activation = 1.1759 * N.tanh(2*x / 3.)
+    return N.cast(activation, N.default_dtype)
+    
 def sigmoid(x):
     return N.sigmoid(x)
     

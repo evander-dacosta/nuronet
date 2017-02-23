@@ -54,7 +54,8 @@ class SGD(Optimiser):
         multiplier on the gradient at each iteration.
     """
 
-    def __init__(self, model, objectives, lr_start, lr_stop=None, weight_decay = 0., clip = 0):
+    def __init__(self, model, objectives, lr_start, lr_stop=None, 
+                 weight_decay = 0., clip = 0):
         """
         TODO:DOC
         """
@@ -62,8 +63,8 @@ class SGD(Optimiser):
         if(lr_stop is not None):
             lrAdjust = AnnealedLearningRate(start=lr_start, stop=lr_stop)
             self.add_callback(lrAdjust)
-        self.learning_rate = lr_start
-        self.weight_decay = weight_decay
+        self.learning_rate = N.cast(lr_start)
+        self.weight_decay = N.cast(weight_decay)
         self.clip = clip
 
     def get_updates(self, cost, params):
@@ -77,7 +78,8 @@ class Momentum(Optimiser):
         TODO:DOC
     """
 
-    def __init__(self, model, objectives, mom_start, lr_start, mom_stop=None, lr_stop=None,
+    def __init__(self, model, objectives, mom_start, lr_start,
+                 mom_stop=None, lr_stop=None,
                  weight_decay = 0., clip = 0):
         Optimiser.__init__(self, model=model, objectives=objectives)
         assert mom_start >= 0.
@@ -148,7 +150,7 @@ class Adagrad(Optimiser):
             lrAdjust.setOptimiser(self)
             self.add_callback(lrAdjust)
         self.learning_rate = lr_start
-        self.epsilon = epsilon
+        self.epsilon = N.cast(epsilon)
         
     def get_updates(self, cost, params):
         grads = compute_grads(cost, params)
@@ -172,9 +174,9 @@ class Adadelta(Optimiser):
             lrAdjust = AnnealedLearningRate(start=lr_start, stop=lr_stop)
             lrAdjust.setOptimiser(self)
             self.add_callback(lrAdjust)
-        self.learning_rate = lr_start
-        self.epsilon = epsilon
-        self.rho = rho
+        self.learning_rate = N.cast(lr_start)
+        self.epsilon = N.cast(epsilon)
+        self.rho = N.cast(rho)
         
     def get_updates(self, cost, params):
         grads = compute_grads(cost, params)
@@ -197,14 +199,14 @@ class Adadelta(Optimiser):
         
         
 class Adam(Optimiser):
-    def __init__(self, model, objectives, lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-8,
+    def __init__(self, model, objectives, lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=N._epsilon,
                  **kwargs):
         Optimiser.__init__(self, model=model, objectives=objectives)
         self.iterations = N.shared(0.)
         self.lr = N.shared(lr)
         self.beta_1 = N.shared(beta_1)
         self.beta_2 = N.shared(beta_2)
-        self.epsilon = epsilon
+        self.epsilon = N.cast(epsilon)
         
     def get_updates(self, cost, params):
         grads = compute_grads(cost, params)

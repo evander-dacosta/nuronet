@@ -202,7 +202,7 @@ class Optimiser(object):
         
         updates = self.get_updates(self.total_loss, self.model.trainable_weights).items()
         updates += self.model.get_updates().items()
-        
+        #print updates
         train_function = N.function(inputs, [self.total_loss], updates=updates)
         valid_function = N.function(inputs, [self.total_loss], updates=updates)
         return train_function, valid_function
@@ -212,6 +212,7 @@ class Optimiser(object):
         self.reset()
         self.set_num_epochs(n_epochs)
         self.compile()
+        self.model.set_training(True)
         
         train_function, valid_function = self.get_train_valid_funcs()
         bestTrainLoss = numpy.inf
@@ -247,6 +248,7 @@ class Optimiser(object):
             self.add_to_history(epochInfo)
             self.increment_epoch()
             self.end_of_epoch()
+        self.model.set_training(False)
         
     def get_updates(self, cost, params):
         raise NotImplementedError()

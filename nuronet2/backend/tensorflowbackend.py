@@ -116,6 +116,9 @@ class TensorflowBackend(Backend):
                                                            allow_soft_placement=True))
         return self._session
         
+    def set_session(self, session):
+        self._session = session
+        
         
         
     def to_tensor(self, x, dtype):
@@ -529,10 +532,103 @@ class TensorflowBackend(Backend):
             raise Exception("Invalid pool mode: {}".format(pool_mode))
         return self._post_conv2d_output(x, 'th')
         
+    def reverse(self, x, axes):
+        if(isinstance(axes, int)):
+            axes = [axes]
+        try:
+            tf.reverse_v2(x, axes)
+        except AttributeError:
+            #older tf
+            dims = [True if i in axes else False for i in range(len(x.get_shape()._dims))]
+            return tf.reverse(x, dims)
+        
     def recurrence(self, step_function, inputs, initial_states,
             unroll=False,
             go_backwards=False, constants=None, input_length=None):
-        raise NotImplementedError()
+        ndim = len(inputs.get_shape())
+        if(ndim < 3):
+            raise ValueError('Input should be at least 3D')
+        axes = [1, 0] + list(range(2, ndim))
+        inputs = tf.transpose(inputs, (axes))
+        
+        if(constants is None):
+            constants = []
+            
+        if(hasattr(tf, 'select')):
+            tf.where = tf.select
+        if(hasattr(tf, 'stack')):
+            stack = tf.stack
+            unstack = tf.unstack
+        else:
+            stack = tf.pack
+            unstack = tf.unpack
+            
+        if(unroll):
+            if(not inputs.get_shape()[0]):
+                raise ValueError('Unrolling requires a fixed '
+                                 'number of timesteps')
+            states = initial_states
+            successive_states = []
+            successive_outputs = []
+            
+            input_list = unstack(inputs)
+            if(go_backwards):
+                input_list.reverse()
+            for input in input_list:
+                output, states = step_function(input, states + constants)
+                successive_outputs.append(output)
+                successive_states.append(states)
+            last_output = successive_outputs[-1]
+            new_states = successive_states[-1]
+            outputs = stack(successive_outputs)
+        else:
+            if(go_backwards):
+                inputs = self.reverse(inputs, 0)
+            states = tuple(initial_states)
+            
+            time_steps = tf.shape(inputs)[0]
+            output_ta = tensor_array_ops.TensorArray(dtype=inputs.dtype,
+                                                     size=time_steps,
+                                                     tensor_array_name='output_ta')
+            input_ta = tensor_array_ops.TensorArray(dtype=inputs.dtype,
+                                                    size=time_steps,
+                                                    tensor_array_name='input_ta')
+            if(hasattr(input_ta, 'unstack')):
+                input_ta = input_ta.unstack(inputs)
+            else:
+                input_ta = input_ta.unpack(inputs)
+            time = tf.constant(0, dtype='int32', name='time')
+            
+            def _step(time, output_ta_t, *states):
+                current_input = input_ta.read(time)
+                output, new_states = step_function(current_input,
+                                                    tuple(states) + 
+                                                    tuple(constants))
+                for state, new_state in zip(states, new_states):
+                    new_state.set_shape(state.get_shape())
+                output_ta_t = output_ta_t.write(time, output)
+                return (time + 1, output_ta_t) + tuple(new_states)
+            
+            final_outputs = control_flow_ops.while_loop(
+                cond=lambda time, *_: time < time_steps,
+                body=_step,
+                loop_vars=(time, output_ta) + states,
+                parallel_iterations=32,
+                swap_memory=True)
+            last_time = final_outputs[0]
+            output_ta = final_outputs[1]
+            new_states = final_outputs[2:]
+            
+            if(hasattr(output_ta, 'stack')):
+                outputs = output_ta.stack()
+            else:
+                outputs = output_ta.pack()
+            last_output = output_ta.read(last_time - 1)
+        
+        axes = [1, 0] + list(range(2, len(outputs.get_shape())))
+        outputs = tf.transpose(outputs, axes)
+        return last_output, outputs, new_states
+            
 
     def l2_norm(self, x, axis):
         if(axis < 0):

@@ -4,11 +4,12 @@ Created on Thu Nov 17 00:36:57 2016
 
 @author: evander
 """
-
+import numpy
 from nuronet2.base import  MLModel, InputDetail, MLConnection
 from nuronet2.activations import get_activation
-from nuronet2.base import get_weightfactory, get_regulariser
 from nuronet2.backend import N
+from nuronet2.base import get_weightfactory, get_regulariser
+
 
 class InputLayer(MLModel):
     def __init__(self, input_shape, input_dtype=N.floatx, input_tensor=None,
@@ -16,7 +17,7 @@ class InputLayer(MLModel):
         if(input_tensor is None):
             input_tensor = N.variable(ndim=len((input_shape)) + 1
                                 ,dtype=input_dtype, name=name)
-            input_tensor._nuro_shape = (None, input_shape[0])
+            input_tensor._nuro_shape = (None,) + input_shape
         else:
             input_shape = input_tensor._shape
         input_tensor._nuro_history = (self, 0, 0)
@@ -94,6 +95,52 @@ class DenseLayer(MLModel):
     def get_output_shape(self, input_shape):
         assert input_shape and len(input_shape) == 2
         return (input_shape[0], self.n)
+        
+        
+class Flatten(MLModel):
+    def __init__(self, input_shape=None, **kwargs):
+        if(input_shape is not None):
+            kwargs['input_shape'] = input_shape
+        MLModel.__init__(self, **kwargs)
+
+        
+    def prop_up(self, state):
+        input_shape = state._nuro_shape
+        state = N.batch_flatten(state)
+        state._nuro_shape = self.get_output_shape(input_shape)
+        return state
+    
+    def build(self, input_shape):
+        self._is_built = True
+        
+    def get_cost(self):
+        return N.cast(0.)
+        
+    def get_output_shape(self, input_shape):
+        return (input_shape[0], numpy.prod(input_shape[1:]))
+        
+class Dropout(MLModel):
+    def __init__(self, p, **kwargs):
+        assert 0. < p < 1.
+        self.p = p
+        MLModel.__init__(self, **kwargs)
+    
+    def build(self, input_shape):
+        self.is_built = True
+        
+    def prop_up(self, x):
+        if(self.is_training):
+            p = self.p
+        else:
+            p = 0.
+        return N.dropout(x, p)
+        
+    def get_cost(self):
+        return N.cast(0.)
+        
+    def get_output_shape(self, input_shape):
+        return input_shape
+
             
             
         

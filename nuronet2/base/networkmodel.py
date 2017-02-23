@@ -10,7 +10,7 @@ Created on Sat Nov 19 19:58:35 2016
 import warnings
 from collections import OrderedDict
 from nuronet2.backend import N
-from mlmodel import MLModel, MLConnection
+from mlmodel import MLModel, MLConnection, make_list
 
 
 class NetworkModel(MLModel):
@@ -297,6 +297,15 @@ class NetworkModel(MLModel):
             weights += layer.non_trainable_weights
         return weights
         
+    def set_training(self, value):
+        assert isinstance(value, bool), "set_training requires True/False arg"
+        self.is_training = value
+        for layer in self.layers:
+            if(isinstance(layer, list)):
+                [n.set_training(value) for n in layer]
+            else:
+                layer.set_training(value)
+        
     def get_weights(self):
         weights = []
         for layer in self.layers:
@@ -310,6 +319,118 @@ class NetworkModel(MLModel):
             for sw, w in zip(layer.weights, layer_weights):
                 N.set_value(sw, w)
             weights = layer_weights[n_params:]
+            
+            
+    def save_weights(self, filepath, overwrite=True):
+        import h5py
+        if(not overwrite and os.path.isfile(filepath)):
+            proceed = can_save_with_overwrite(filepath)
+            if(not proceed):
+                return
+        f = h5py.File(filepath, 'w')
+        self.save_weights_to_hdf5_group(f)
+        f.flush()
+        f.close()
+        
+    def load_weights(self, filepath, by_name=False):
+        """Loads all layer weights from a HDF5 save file.
+        
+        If `by_name` is False (default) weights are loaded
+        based on the network's topology, meaning the architecture
+        should be the same as when the weights were saved.
+        Note that layers that don't have weights are not taken
+        into account in the topological ordering, so adding or
+        removing layers is fine as long as they don't have weights.
+        
+        If `by_name` is True, weights are loaded into layers
+        only if they share the same name. This is useful
+        for fine-tuning or transfer-learning models where
+        some of the layers have changed.
+        """
+        import h5py
+        f = h5py.File(filepath, mode='r')
+        if('layer_names' not in f.attrs and 'model_weights' in f):
+            f = f['model_weights']
+        if(by_name):
+            self.load_weights_from_hdf5_group_by_name(f)
+        else:
+            self.load_weights_from_hdf5_group(f)
+        if(hasattr(f, 'close')):
+            f.close()
+            
+    def save_weights_to_hdf5_group(self, f):
+        f.attrs['layer_names'] = [layer.name.encode('utf8') for layer in self.layers]
+        for layer in self.layers:
+            group = f.create_group(layer.name)
+            symbolic_weights = layer.weights
+            weight_vals = [N.get_value(x) for x in symbolic_weights]
+            weight_names = []
+            for i, w in enumerate(symbolic_weights):
+                name = 'param_' + str(i)
+                weight_names.append(name.encode('utf8'))
+            group.attrs['weight_names'] = weight_names
+            for name, val in zip(weight_names, weight_vals):
+                param_dset = group.create_dataset(name, val.shape, dtype=val.dtype)
+                if(not val.shape):
+                    param_dset[()] = val
+                else:
+                    param_dset[:] = val
+                    
+    def load_weights_from_hdf5_group(self, f):
+        filtered_layers = []
+        for layer in self.layers:
+            weights = layer.weights
+            if(weights):
+                filtered_layers.append(layer)
+        
+        layer_names = [n.decode('utf8') for n in f.attrs['layer_names']]
+        filtered_layer_names = []
+        for name in layer_names:
+            group = f[name]
+            weight_names = [n.decode('utf8') for n in group.attrs['weight_names']]
+            if(len(weight_names)):
+                filtered_layer_names.append(name)
+        layer_names = filtered_layer_names
+        if(len(layer_names) != len(filtered_layers)):
+            raise Exception("Trying to load a file containing {} layers into a model with {} layers".format(len(layer_names), len(filtered_layers)))
+            
+        for i, name in enumerate(layer_names):
+            group = f[name]
+            weight_names = [n.decode('utf8') for n in group.attrs['weight_names']]
+            weight_values = [group[weight_name] for weight_name in weight_names]
+            layer = filtered_layers[i]
+            symbolic_weights = layer.weights
+            if(len(weight_values) != len(symbolic_weights)):
+                raise Exception("Layer #"+str(i)+"has mismatching number of weights from the save file")
+            for w, v in zip(symbolic_weights, weight_values):
+                N.set_value(w, v)
+                
+    def load_weights_from_hdf5_group_by_name(self, f):
+        """Name-base loading of weights.
+        (Instead of usual topological weight loading)
+        """
+        layer_names = [n.decode('utf8') for n in f.attrs['layer_names']]
+        index = {}
+        for layer in self.layers:
+            if(layer.name):
+                index.setdefault(layer.name, []).append(layer)
+        
+        for i, name in enumerate(layer_names):
+            group = f[name]
+            weight_names = [n.decode('utf8') for n in group.attrs['weight_names']]
+            weight_values = [group[weight_name] for weight_name in weight_names]
+            
+            for layer in index.get(name, []):
+                symbolic_weights = layer.weights
+                if(len(weight_values) != len(symbolic_weights)):
+                    raise Exception("Layer #"+str(i)+"has mismatching number of weights from the save file")
+                
+                for w, v in zip(symbolic_weights, weight_values):
+                    N.set_value(w, v)
+                    
+            
+    
+            
             
     def get_layer(self, index=None):
         """Fetches a layer based on its index in the graph.
@@ -438,6 +559,7 @@ class NetworkModel(MLModel):
         
 
 if __name__ == "__main__":
+    from nuronet2.layers import Input, DenseLayer
     a = Input((2,))
     b = Input((4,))
     c = DenseLayer(5)
@@ -445,7 +567,7 @@ if __name__ == "__main__":
     tensor1 = c(a)
     tensor2 = c(b)
     
-    net = AcyclicModel([a, b], [tensor1, tensor2], 'fred')
+    net = NetworkModel([a, b], [tensor1, tensor2], 'fred')
     out = net([a, b])
     f = N.function([a, b], out)
         
