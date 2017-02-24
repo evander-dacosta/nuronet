@@ -13,7 +13,34 @@ from nuronet2.base import get_weightfactory, get_regulariser
 
 class Layer(MLModel):
     def __init__(self, **kwargs):
-        super(MLModel, self).__init__(**kwargs)
+        MLModel.__init__(self, **kwargs)
+        
+    def create_input_layer(self, input_shape, input_dtype=None,
+                           name=None):
+        """
+        Creates an input layer if the layer type is used without 
+        one being specified.
+        
+        Inputs
+        ------
+            @param input_shape: A tuple specifying the shape (with batchsize)
+                                of the layer
+            @param input_dtype: Input datatype
+            @param name: layer name
+            
+        Returns
+        -------
+            InputLayer instance
+        """
+        if(not name):
+            prefix = self.__class__.__name__.lower() + '__input__'
+            name = prefix + str(N.get_uid(prefix))
+        if(not input_dtype):
+            input_dtype = N.floatx
+        self.input_shape = input_shape
+        self.input_dtype = input_dtype
+        x = Input(shape=input_shape, dtype=input_dtype, name=name)
+        return self(x)
 
 class InputLayer(Layer):
     def __init__(self, input_shape, input_dtype=N.floatx, input_tensor=None,
@@ -25,7 +52,7 @@ class InputLayer(Layer):
         else:
             input_shape = input_tensor._shape
         input_tensor._nuro_history = (self, 0, 0)
-        super(Layer, self).__init__(input_shape=input_shape, 
+        Layer.__init__(self, input_shape=input_shape, 
                                     input_dtype=input_dtype,
                                     name=name)
         MLConnection(self, inbound_models=[], connection_indices=[],
@@ -56,6 +83,8 @@ def Input(shape=None, name=None, dtype=N.floatx,
     These attributes allow us to build models by just specifying the input
     and output tensors without the underlying model/layer connections.
     """
+    if not shape and tensor is None:
+        assert shape, ("Input() requires a shape argument")
     input_layer = InputLayer(input_shape=tuple(shape),
                              name=name, input_dtype=dtype,
                              input_tensor=tensor)
@@ -79,7 +108,7 @@ class DenseLayer(Layer):
         self.input_details = [InputDetail(ndim=2)]
         if(input_shape is not None):
             kwargs['input_shape'] = input_shape
-        super(Layer, self).__init__(**kwargs)
+        Layer.__init__(self, **kwargs)
         
         
     def build(self, input_shape):
@@ -108,7 +137,7 @@ class Flatten(Layer):
     def __init__(self, input_shape=None, **kwargs):
         if(input_shape is not None):
             kwargs['input_shape'] = input_shape
-        super(Layer, self).__init__(**kwargs)
+        Layer.__init__(self, **kwargs)
 
         
     def prop_up(self, state):
@@ -130,7 +159,7 @@ class Dropout(Layer):
     def __init__(self, p, **kwargs):
         assert 0. < p < 1.
         self.p = p
-        super(Layer, self).__init__(self, **kwargs)
+        Layer.__init__(self, **kwargs)
     
     def build(self, input_shape):
         self.is_built = True

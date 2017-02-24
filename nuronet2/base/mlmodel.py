@@ -14,6 +14,42 @@ def make_list(x):
     if(type(x) is list):
         return x
     return [x]
+    
+def get_source_inputs(tensor, layer=None, connection_index=None):
+    """
+    Returns a list of input sources necessary to compute 
+    'tensor'
+    
+    Inputs
+    ------
+        @param tensor : The tensor to compute
+        @param layer : Layer instance from which the tensor originates
+        @param connection_index: Origin MLConnection index of the tensor
+    """
+    if(not hasattr(tensor, '_nuro_history')):
+        return tensor
+    
+    if(layer is None or connection_index):
+        layer, connection_index, _ = tensor._nuro_history
+    if(not layer.inbound_connections):
+        return [tensor]
+    else:
+        connection = layer.inbound_connections[connection_index]
+        if(not connection.inbound_models):
+            #reached an input layer, stop.
+            return connection.input_tensors
+        else:
+            source_tensors = []
+            for i in range(len(connection.inbound_models)):
+                x = connection.input_tensors[i]
+                layer = connection.inbound_models[i]
+                connection_index = connection.connection_indices[i]
+                previous_sources = get_source_inputs(x, layer, 
+                                                     connection_index)
+                for x in previous_sources:
+                    if(x not in source_tensors):
+                        source_tensors.append(x)
+            return source_tensors
 
 
 class InputDetail(object):
@@ -158,6 +194,7 @@ class MLModel(object):
         self.is_built = False
         self.train_phase = True
         self.is_training = False
+        self.trainable = True
         
         valid_kwargs = {'input_shape', 'input_dtype', 'name'}
         for kwarg in kwargs.keys():

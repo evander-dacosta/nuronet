@@ -287,14 +287,16 @@ class NetworkModel(MLModel):
     def trainable_weights(self):
         weights = []
         for layer in self.layers:
-            weights += layer.trainable_weights
+            if(layer.trainable):
+                weights += layer.trainable_weights
         return weights
         
     @property
     def non_trainable_weights(self):
         weights = []
         for layer in self.layers:
-            weights += layer.non_trainable_weights
+            if(not layer.trainable):
+                weights += layer.trainable_weights + layer.non_trainable_weights
         return weights
         
     def set_training(self, value):
