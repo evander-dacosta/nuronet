@@ -5,6 +5,7 @@ Created on Wed Nov 16 23:54:21 2016
 @author: evander
 """
 import numpy
+import time
 from nuronet2.backend import N
 from collections import OrderedDict
 from nuronet2.dataset import DenseDataset
@@ -374,7 +375,7 @@ class MLModel(object):
             name = self.output_layers[i].name
             self.targets.append(N.variable(ndim=len(shape),
                                            dtype=N.dtype(self.outputs[i]),
-                                            name=name + '_target'))
+                                            name='h'+ name + '_target'))
         #compute total loss
         total_loss = None
         for i in range(len(self.outputs)):
@@ -504,6 +505,7 @@ class MLModel(object):
         
         for epoch in range(initial_epoch, n_epochs):
             callbacks.epoch_start(epoch)
+            epoch_start_time = time.time()
             if(dataset.shuffle):
                 dataset.shuffler()
             epoch_logs = {}
@@ -530,6 +532,7 @@ class MLModel(object):
             epoch_logs['epoch'] = epoch
             epoch_logs['train_loss'] = numpy.mean(epoch_loss)
             epoch_logs['valid_loss'] = valid_loss[0]
+            epoch_logs['epoch_time'] = time.time() - epoch_start_time
             callbacks.epoch_end(epoch, epoch_logs)
         
         callbacks.train_end()

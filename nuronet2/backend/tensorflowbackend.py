@@ -79,7 +79,11 @@ class TensorflowBackend(Backend):
         self.manual_var_init = False
         self._session = None
         
+        
     #--------------------Tensorflow-related stuff-------------------------#
+    def backend(self):
+        return 'tensorflow'
+
     @property
     def session(self):
         return self.get_session()
@@ -223,6 +227,24 @@ class TensorflowBackend(Backend):
         
     def cast(self, x, dtype=None):
         return tf.cast(x, dtype=_str_dtype(dtype))
+        
+    def stack(self, x):
+        try:
+            return tf.stack(x)
+        except AttributeError:
+            return tf.pack(x)
+        
+    def repeat(self, x, n):
+        """Repeats a 2D tensor.
+        if x has shape (samples, dim) and n is 2,
+        the output will have shape (samples, 2, dim).
+        # Returns
+            A tensor.
+        """
+        assert self.ndim(x) == 2
+        x = tf.expand_dims(x, 1)
+        pattern = self.stack([1, n, 1])
+        return tf.tile(x, pattern)
         
     # LINEAR ALGEBRA OPS
         

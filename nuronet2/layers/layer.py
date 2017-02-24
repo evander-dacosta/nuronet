@@ -66,27 +66,33 @@ def Input(shape=None, name=None, dtype=N.floatx,
 class DenseLayer(Layer):
     def __init__(self, n, weight_factory='xavier_uniform',
                  activation='linear', weights=None, w_regulariser=None,
-                 b_regulariser=None, input_shape=None, **kwargs):
+                 b_regulariser=None, input_shape=None,
+                 **kwargs):
         self.weightFactory = get_weightfactory(weight_factory)
         self.activation = get_activation(activation)
         self.w_regulariser = get_regulariser(w_regulariser)
         self.b_regulariser = get_regulariser(b_regulariser)
         
+        if(input_shape is not None):
+            self.input_dim = input_shape[-1]
+        else:
+            self.input_dim = None
+        
         self.n = n
-        self.input_details = [InputDetail(ndim=2)]
         if(input_shape is not None):
             kwargs['input_shape'] = input_shape
         Layer.__init__(self, **kwargs)
         
         
     def build(self, input_shape):
-        assert(len(input_shape) == 2)
-        input_dim = input_shape[1]
-        self.input_details = [InputDetail(dtype=N.floatx, shape=(None, input_dim))]
-        self.W = self.weightFactory(shape=(input_shape[-1], self.n))
+        assert(len(input_shape) >= 2)
+        input_dim = input_shape[-1]
+        self.input_details = [InputDetail(dtype=N.floatx, ndim=len(input_shape))]
+        
+        self.W = self.weightFactory(shape=(input_dim, self.n))
         self.b = N.zeros(shape=(self.n,))
         self.trainable_weights = [self.W, self.b]
-        self._is_built = True
+        self.is_built = True
         
     def prop_up(self, x):
         return self.activation(N.dot(x, self.W) + self.b)
@@ -97,8 +103,11 @@ class DenseLayer(Layer):
         return w_cost + b_cost
             
     def get_output_shape(self, input_shape):
-        assert input_shape and len(input_shape) == 2
-        return (input_shape[0], self.n)
+        assert input_shape and len(input_shape) >= 2
+        assert input_shape[-1] and input_shape[-1] == self.input_dim
+        output_shape = list(input_shape)
+        output_shape[-1] = self.n
+        return tuple(output_shape)
         
         
 class Flatten(Layer):
@@ -115,7 +124,7 @@ class Flatten(Layer):
         return state
     
     def build(self, input_shape):
-        self._is_built = True
+        self.is_built = True
         
     def get_cost(self):
         return N.cast(0.)

@@ -155,7 +155,7 @@ class TrainLogger(Callback):
         ])
         if('valid_loss' in logs.keys()):
             info_tabulate['valid_loss'] = "{:.5f}".format(float(logs['valid_loss']))
-            
+        info_tabulate['epoch_time'] = "{:.2f} s".format(logs['epoch_time'])         
         tab = tabulate([info_tabulate], headers="keys", floatfmt='.5f')
         out = ""
         if(self.print_headers):

@@ -16,6 +16,9 @@ class TheanoBackend(Backend):
     def __init__(self, rng_seed=None, default_dtype=theano.config.floatX):
         Backend.__init__(self, rng_seed=rng_seed, default_dtype=default_dtype)
         
+    def backend(self):
+        return 'theano'
+        
     def createRNG(self, seed=None):
         if(seed is None):
             seed = numpy.random.randint(1e7)
@@ -57,6 +60,16 @@ class TheanoBackend(Backend):
     def shape(self, x):
         return x.shape
         
+    def int_shape(self, x):
+        """
+        Returns the shape of a tensor as a tuple of ints
+        or None entries. Works only with Tensorflow
+        """
+        if hasattr(x, '_nuro_shape'):
+            return x._nuro_shape
+        else:
+            raise Exception('Not a Nuronet tensor:', x)
+        
     def ndim(self, x):
         return x.ndim
         
@@ -90,6 +103,18 @@ class TheanoBackend(Backend):
         if(dtype is None):
             dtype = self._default_dtype
         return T.cast(x, dtype)
+        
+    def stack(self, x):
+        return T.stack(*x)
+        
+    def repeat(self, x, n):
+        """Repeat a 2D tensor.
+        If x has shape (samples, dim) and n=2,
+        the output will have shape (samples, 2, dim).
+        """
+        assert x.ndim == 2
+        x = x.dimshuffle((0, 'x', 1))
+        return T.extra_ops.repeat(x, n, axis=1)
         
 
     # LINEAR ALGEBRA OPS
@@ -368,6 +393,9 @@ class TheanoBackend(Backend):
             def _stepFunc(input, *states):
                 output, newStates = step_function(input, states)
                 return [output] + newStates
+                
+            if(len(initial_states) > 0):
+                initial_states[0] = T.unbroadcast(initial_states[0], 1)
                 
             results, _ = theano.scan(
                 _stepFunc,
