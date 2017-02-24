@@ -471,17 +471,16 @@ class MLModel(object):
                                shuffle=shuffle)
         
         
-        return self._fit_dataset(dataset=dataset, n_epochs=n_epochs, 
+        return self.fit_dataset(dataset=dataset, n_epochs=n_epochs, 
                                 callbacks=callbacks,
                                 verbose=verbose, initial_epoch=initial_epoch)
                                 
-    def _fit_dataset(self, dataset, n_epochs, callbacks, verbose, 
-                     initial_epoch, outlabels=None):
+    def fit_dataset(self, dataset, n_epochs, callbacks=None, verbose=True, 
+                     initial_epoch=0):
         
         self.make_train_function()
         self.make_test_function()
-        
-        outlabels = outlabels or []
+
         #initialise callbacks
         self.history = cbks.History()
         callbacks = (callbacks or []) + [self.history]
