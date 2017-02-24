@@ -11,7 +11,7 @@ import json
 import warnings
 
 from collections import deque, OrderedDict, Iterable
-from nuronet2.backend import N, Progbar
+from nuronet2.backend import N
 
 
 class CallbackList(object):

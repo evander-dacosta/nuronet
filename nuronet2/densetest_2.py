@@ -19,13 +19,17 @@ if __name__ == "__main__":
     fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
     X, Y, XTest, YTest = Iris.readFile(fName, dtype=N.default_dtype)
     
-    layer1 = Input((3,))
+    layer1 = InputLayer((3,))
     layer2 = DenseLayer(100, w_regulariser={'name':'l2', 'l2':1e-4},
                         activation="tanh2")
     layer3 = DenseLayer(3, activation="softmax")
-    out = layer3(layer2(layer1))
+    """out = layer3(layer2(layer1))
     
-    model = NetworkModel(layer1, out)
+    model = NetworkModel(layer1, out)"""
+    model = NeuralNetwork()
+    model.add(layer1)
+    model.add(layer2)
+    model.add(layer3)
     model.compile('adam', "categorical_crossentropy")
     model.fit(X, Y, batch_size=2, n_epochs=20)
     

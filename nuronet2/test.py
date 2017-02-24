@@ -14,9 +14,36 @@ class NeuralNetwork(MLModel):
         
         MLModel.__init__(self, **kwargs)
         
+        self._trainable_weights = None
+        self._non_trainable_weights = None
+
         if(layers):
             for layer in layers:
                 self.add(layer)
+                
+    @property
+    def trainable_weights(self):
+        weights = []
+        for layer in self.layers:
+            if(layer.trainable):
+                weights += layer.trainable_weights
+        return weights
+        
+    @trainable_weights.setter
+    def trainable_weights(self, value):
+        self._trainable_weights = value
+        
+    @property
+    def non_trainable_weights(self):
+        weights = []
+        for layer in self.layers:
+            if(not layer.trainable):
+                weights += layer.trainable_weights + layer.non_trainable_weights
+        return weights
+
+    @non_trainable_weights.setter
+    def non_trainable_weights(self, value):
+        self._non_trainable_weights = value
                 
     def add(self, layer):
         """
@@ -157,18 +184,6 @@ class NeuralNetwork(MLModel):
         if(not self.is_built):
             self.build()
         return self.model.get_updates()
-        
-    @property
-    def trainable_weights(self):
-        if(not self.is_built):
-            self.build()
-        return self.model.trainable_weights()
-        
-    @property
-    def non_trainable_weights(self):
-        if(not self.is_built):
-            self.build()
-        return self.model.non_trainable_weights()
         
     def set_training(self, value):
         if(not self.is_built):
