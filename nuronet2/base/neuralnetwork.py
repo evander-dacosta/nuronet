@@ -1,9 +1,9 @@
 
 from nuronet2.base import MLModel, NetworkModel, MLConnection, get_source_inputs
-from layer import Layer
+from layer import Layer, InputLayer
 
 class NeuralNetwork(MLModel):
-    def __init__(self, layers=None, name=None, **kwargs):
+    def __init__(self, input_shape, layers=None, name=None, **kwargs):
         self.layers = []
         self.model = None #internal model instance
         self.inputs = []
@@ -14,7 +14,9 @@ class NeuralNetwork(MLModel):
         
         self._trainable_weights = None
         self._non_trainable_weights = None
-
+        
+        
+        self.add(InputLayer(input_shape))
         if(layers):
             for layer in layers:
                 self.add(layer)
