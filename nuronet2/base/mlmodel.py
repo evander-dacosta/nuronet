@@ -4,14 +4,14 @@ Created on Wed Nov 16 23:54:21 2016
 
 @author: evander
 """
-
+import numpy
 from nuronet2.backend import N
 from collections import OrderedDict
 from nuronet2.dataset import DenseDataset
 from nuronet2.objectives import get_objective
 
-from nuronet2.test_optimiser import get_optimiser
-import nuronet2.test_callbacks as cbks
+from nuronet2.optimisers import get_optimiser
+import nuronet2.callbacks as cbks
 
 def make_list(x):
     """Normalises a list/tensor into a list
@@ -426,7 +426,7 @@ class MLModel(object):
                                             [self.total_loss],
                                             **self._function_kwargs)
     
-    def fit(self, x, y, batch_size=32, n_epochs=10, verbose=1,
+    def fit(self, x, y, batch_size=32, n_epochs=10, verbose=True,
             callbacks=None, validation_split=0.1, test_data=None,
             shuffle=True, initial_epoch=0):
         """
@@ -483,7 +483,9 @@ class MLModel(object):
         outlabels = outlabels or []
         #initialise callbacks
         self.history = cbks.History()
-        callbacks = [cbks.BaseLogger()] + (callbacks or []) + [self.history]
+        callbacks = (callbacks or []) + [self.history]
+        if(verbose):
+            callbacks += [cbks.TrainLogger()]
         callbacks = cbks.CallbackList(callbacks)
         
         #make it possible to call callbacks from a different model
@@ -509,7 +511,7 @@ class MLModel(object):
             
             #iterate over batches
             batch_index = 0
-            epoch_loss = 0
+            epoch_loss = []
             valid_loss = 0
             for x_b, y_b in dataset(x_train, y_train):
                 batch_index += 1
@@ -519,14 +521,15 @@ class MLModel(object):
                 
                 callbacks.batch_start(batch_index, batch_logs)
                 loss = self.train_function(x_b, y_b)
-                loss = loss[0]
-                batch_logs['loss'] = loss
+                epoch_loss += loss
+                batch_logs['loss'] = loss[0]
                 epoch_loss += loss
                 callbacks.batch_end(batch_index, batch_logs)
                 
             valid_loss = self.test_function(x_valid, y_valid)
-            epoch_logs['loss'] = epoch_loss
-            epoch_logs['valid_loss'] = valid_loss
+            epoch_logs['epoch'] = epoch
+            epoch_logs['train_loss'] = numpy.mean(epoch_loss)
+            epoch_logs['valid_loss'] = valid_loss[0]
             callbacks.epoch_end(epoch, epoch_logs)
         
         callbacks.train_end()

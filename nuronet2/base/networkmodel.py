@@ -8,6 +8,7 @@ Created on Sat Nov 19 19:58:35 2016
 # -*- coding: utf-8 -*-
 
 import warnings
+import os
 from collections import OrderedDict
 from nuronet2.backend import N
 from mlmodel import MLModel, MLConnection, make_list

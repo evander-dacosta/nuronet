@@ -9,6 +9,9 @@ import numpy
 import time
 import json
 import warnings
+import sys
+from tabulate import tabulate
+from collections import OrderedDict
 
 from collections import deque, OrderedDict, Iterable
 from nuronet2.backend import N
@@ -135,32 +138,34 @@ class Callback(object):
 
     def train_end(self, logs=None):
         pass
+
     
-    
-class BaseLogger(Callback):
+class TrainLogger(Callback):
     """
-    Callback that accumulates epoch averages of metrics.
-    This callback is automatically applied to every Nuronet model.
+    Prints metrics at the end of each epoch
     """
+    def __init__(self, f=sys.stdout):
+        self.print_headers = True
+        self.f = f
 
-    def epoch_start(self, epoch, logs=None):
-        self.seen = 0
-        self.totals = {}
+    def epoch_end(self, epoch, logs):
+        info_tabulate = OrderedDict([
+            ('epoch', logs['epoch']),
+            ('train_loss', '{:.5f}'.format(logs['train_loss']))
+        ])
+        if('valid_loss' in logs.keys()):
+            info_tabulate['valid_loss'] = "{:.5f}".format(float(logs['valid_loss']))
+            
+        tab = tabulate([info_tabulate], headers="keys", floatfmt='.5f')
+        out = ""
+        if(self.print_headers):
+            out = "\n".join(tab.split('\n', 2)[:2])
+            out += "\n"
+            self.print_headers = False
 
-    def batch_start(self, batch, logs=None):
-        logs = logs or {}
-        batch_size = logs.get('size', 0)
-        self.seen += batch_size
-
-        for k, v in logs.items():
-            if k in self.totals:
-                self.totals[k] += v * batch_size
-            else:
-                self.totals[k] = v * batch_size
-
-    def epoch_end(self, epoch, logs=None):
-        print "epoch {}, loss {}, valid:{}".format(epoch, logs['loss'],
-                                                logs['valid_loss'])
+        out += tab.rsplit("\n", 1)[-1]
+        out += "\n"
+        self.f.write(out)
                     
 
             
@@ -180,3 +185,12 @@ class History(Callback):
         self.epoch.append(epoch)
         for k, v in logs.items():
             self.history.setdefault(k, []).append(v)
+    
+    def plot(self):
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        plt.figure()
+        plt.plot(self.epoch, self.history['train_loss'], label='train_loss')
+        plt.plot(self.epoch, self.history['valid_loss'], label='valid_loss')
+        plt.legend()
+        plt.show()
