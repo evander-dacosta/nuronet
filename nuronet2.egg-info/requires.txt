@@ -5,3 +5,4 @@ theano
 tabulate
 scikit-learn
 pandas
+h5py

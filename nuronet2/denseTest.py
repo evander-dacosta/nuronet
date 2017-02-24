@@ -25,7 +25,6 @@ if __name__ == "__main__":
     layer2 = DenseLayer(100, w_regulariser={'name':'l2', 'l2':1e-4},
                         activation="tanh2")
     layer3 = DenseLayer(3, activation="softmax")
-    
     out = layer3(layer2(layer1))
     
     model = NetworkModel(layer1, out)

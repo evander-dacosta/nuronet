@@ -196,7 +196,7 @@ class TheanoBackend(Backend):
     def reshape(self, x, shape):
         return T.reshape(x, shape)
         
-    def expand_dim(self, x, dim):
+    def expand_dim(self, x, dim=-1):
         pattern = [i for i in range(x.type.ndim)]
         if(dim < 0):
             if x.type.ndim == 0:

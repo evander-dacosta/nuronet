@@ -11,7 +11,11 @@ from nuronet2.backend import N
 from nuronet2.base import get_weightfactory, get_regulariser
 
 
-class InputLayer(MLModel):
+class Layer(MLModel):
+    def __init__(self, **kwargs):
+        super(MLModel, self).__init__(**kwargs)
+
+class InputLayer(Layer):
     def __init__(self, input_shape, input_dtype=N.floatx, input_tensor=None,
                  name=None):
         if(input_tensor is None):
@@ -21,12 +25,14 @@ class InputLayer(MLModel):
         else:
             input_shape = input_tensor._shape
         input_tensor._nuro_history = (self, 0, 0)
-        MLModel.__init__(self, input_shape=input_shape, input_dtype=input_dtype,
-                         name=name)
+        super(Layer, self).__init__(input_shape=input_shape, 
+                                    input_dtype=input_dtype,
+                                    name=name)
         MLConnection(self, inbound_models=[], connection_indices=[],
                      tensor_indices=[], input_tensors=[input_tensor],
-                    output_tensors=[input_tensor], input_shapes=[self.input_shape],
-                    output_shapes=[self.input_shape])
+                     output_tensors=[input_tensor],
+                     input_shapes=[self.input_shape],
+                     output_shapes=[self.input_shape])
                     
     def build(self, input_shape):
         self.is_built = True
@@ -60,7 +66,7 @@ def Input(shape=None, name=None, dtype=N.floatx,
         return outputs
         
         
-class DenseLayer(MLModel):
+class DenseLayer(Layer):
     def __init__(self, n, weight_factory='xavier_uniform',
                  activation='linear', weights=None, w_regulariser=None,
                  b_regulariser=None, input_shape=None, **kwargs):
@@ -73,7 +79,8 @@ class DenseLayer(MLModel):
         self.input_details = [InputDetail(ndim=2)]
         if(input_shape is not None):
             kwargs['input_shape'] = input_shape
-        MLModel.__init__(self, **kwargs)
+        super(Layer, self).__init__(**kwargs)
+        
         
     def build(self, input_shape):
         assert(len(input_shape) == 2)
@@ -97,11 +104,11 @@ class DenseLayer(MLModel):
         return (input_shape[0], self.n)
         
         
-class Flatten(MLModel):
+class Flatten(Layer):
     def __init__(self, input_shape=None, **kwargs):
         if(input_shape is not None):
             kwargs['input_shape'] = input_shape
-        MLModel.__init__(self, **kwargs)
+        super(Layer, self).__init__(**kwargs)
 
         
     def prop_up(self, state):
@@ -119,11 +126,11 @@ class Flatten(MLModel):
     def get_output_shape(self, input_shape):
         return (input_shape[0], numpy.prod(input_shape[1:]))
         
-class Dropout(MLModel):
+class Dropout(Layer):
     def __init__(self, p, **kwargs):
         assert 0. < p < 1.
         self.p = p
-        MLModel.__init__(self, **kwargs)
+        super(Layer, self).__init__(self, **kwargs)
     
     def build(self, input_shape):
         self.is_built = True

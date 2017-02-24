@@ -48,6 +48,9 @@ class Backend(object):
     def default_dtype(self):
         return self._default_dtype
         
+    def int_shape(self, x):
+        return x._nuro_shape
+        
     def createRNG(self, seed=None):
         raise NotImplementedError()
         

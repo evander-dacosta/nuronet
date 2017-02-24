@@ -385,7 +385,7 @@ class TensorflowBackend(Backend):
     def reshape(self, x, shape):
         return tf.reshape(x, shape)
         
-    def expand_dim(self, x, dim):
+    def expand_dim(self, x, dim=-1):
         return tf.expand_dims(x, dim)
         
     def dimshuffle(self, x, pattern):

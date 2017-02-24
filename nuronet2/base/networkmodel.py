@@ -16,20 +16,20 @@ from mlmodel import MLModel, MLConnection, make_list
 class NetworkModel(MLModel):
     """A container for acyclically connected MLModels
     """
-    def __init__(self, input, output, name=None):
+    def __init__(self, inputs, outputs, name=None):
         if(not name):
             name = "_" + self.__class__.__name__.lower() + "_"
             name = name + str(N.get_uid(name))
         self.name = name
-        if(type(input) in (list, tuple)):
-            self.inputs = list(input)
+        if(type(inputs) in (list, tuple)):
+            self.inputs = list(inputs)
         else:
-            self.inputs = [input]
+            self.inputs = [inputs]
             
-        if(type(output) in (list, tuple)):
-            self.outputs = list(output)
+        if(type(outputs) in (list, tuple)):
+            self.outputs = list(outputs)
         else:
-            self.outputs = [output]
+            self.outputs = [outputs]
             
         #check for input redundancy
         in_set = set(self.inputs)

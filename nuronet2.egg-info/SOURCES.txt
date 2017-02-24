@@ -1,5 +1,6 @@
 setup.py
 nuronet2/__init__.py
+nuronet2/cifartest.py
 nuronet2/denseTest.py
 nuronet2/test.py
 nuronet2.egg-info/PKG-INFO
@@ -17,6 +18,7 @@ nuronet2/backend/theanobackend.py
 nuronet2/backend/utils.py
 nuronet2/base/__init__.py
 nuronet2/base/mlmodel.py
+nuronet2/base/networkmodel.py
 nuronet2/base/optimiser.py
 nuronet2/base/weightfactory.py
 nuronet2/base/weightregulariser.py
@@ -28,6 +30,7 @@ nuronet2/dataset/feti.py
 nuronet2/dataset/iris.py
 nuronet2/dataset/mnist.py
 nuronet2/layers/__init__.py
+nuronet2/layers/convlayers.py
 nuronet2/layers/layer.py
 nuronet2/objectives/__init__.py
 nuronet2/objectives/objectives.py
