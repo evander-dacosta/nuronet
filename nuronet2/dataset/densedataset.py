@@ -45,8 +45,6 @@ class DenseDataset(Dataset):
             self.Y = self.X
             self.YTest = self.XTest
 
-        if(shuffle):
-            self.shuffler()
         
         # get the Y's dtype to find out whether it's a
         # label or regression problem

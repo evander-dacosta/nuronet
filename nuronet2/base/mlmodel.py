@@ -7,6 +7,11 @@ Created on Wed Nov 16 23:54:21 2016
 
 from nuronet2.backend import N
 from collections import OrderedDict
+from nuronet2.dataset import DenseDataset
+from nuronet2.objectives import get_objective
+
+from nuronet2.test_optimiser import get_optimiser
+import nuronet2.test_callbacks as cbks
 
 def make_list(x):
     """Normalises a list/tensor into a list
@@ -334,10 +339,204 @@ class MLModel(object):
     def get_weights(self):
         params = self.weights
         return [N.get_value(param) for param in params]
-
-
-                                       
-                                       
+        
+    def compile(self, optimiser, loss, **kwargs):
+        """
+        Configures the model for training.
+        
+        Inputs
+        ------
+            optimizer: str (name of optimizer) or optimizer object.
+                See [optimizers](/optimizers).
+            loss: str (name of objective function) or objective function.
+                See [objectives](/objectives).
+                If the model has multiple outputs, you can use a different loss
+                on each output by passing a dictionary or a list of objectives.
+            kwargs: when using the Theano backend, these arguments
+                are passed into N.function. Ignored for Tensorflow backend.
+        """
+        self.build()
+        if(not isinstance(loss, list)):
+            loss = [loss]
+        self.optimiser = get_optimiser(optimiser)
+        self.loss = loss
+        
+        if(len(loss) != len(self.outputs)):
+            raise ValueError("loss should have one entry per output "
+                            "currently has {} entries".format(len(loss)) +
+                            "for {} outputs".format(len(self.outputs)))
+        self.loss_functions = [get_objective(objective) for objective in loss]
+        
+        #prepare targets of model
+        self.targets = []
+        for i in range(len(self.outputs)):
+            shape = self.outputs[i]._nuro_shape
+            name = self.output_layers[i].name
+            self.targets.append(N.variable(ndim=len(shape),
+                                           dtype=N.dtype(self.outputs[i]),
+                                            name=name + '_target'))
+        #compute total loss
+        total_loss = None
+        for i in range(len(self.outputs)):
+            y_true = self.targets[i]
+            y_pred = self.outputs[i]
+            loss_fn = self.loss_functions[i]
+            if(total_loss is None):
+                total_loss = loss_fn(y_true, y_pred)
+            else:
+                total_loss += loss_fn(y_true, y_pred)
+        
+        #add regularisation penalties
+        total_loss += self.get_cost()
+        
+        #prepare gradient updates and state updates
+        self.total_loss = total_loss
+        
+        # functions for train and test will
+        # be created when required
+        self._function_kwargs = kwargs
+        
+        self.train_function = None
+        self.test_function = None
+        
+        
+        
+    def make_train_function(self):
+        if(not(hasattr(self, 'train_function'))):
+            raise RuntimeError('Model must be compiled before a'
+                                'train function is made')
+        if(self.train_function is None):
+            inputs = self.inputs + self.targets
+            
+            training_updates = self.optimiser.get_updates(self.trainable_weights,
+                                             self.total_loss)
+            updates = self.get_updates().items() + training_updates
+        
+            self.train_function = N.function(inputs, 
+                                         [self.total_loss],
+                                         updates=updates,
+                                         **self._function_kwargs)
+    def make_test_function(self):
+        if(not(hasattr(self, 'test_function'))):
+            raise RuntimeError('Model must be compiled before a'
+                                'test function is made')
+        if(self.test_function is None):
+            inputs = self.inputs + self.targets
+            self.test_function = N.function(inputs,
+                                            [self.total_loss],
+                                            **self._function_kwargs)
+    
+    def fit(self, x, y, batch_size=32, n_epochs=10, verbose=1,
+            callbacks=None, validation_split=0.1, test_data=None,
+            shuffle=True, initial_epoch=0):
+        """
+        Trains the model for a fixed number of epochs
+        
+        Inputs
+        ------
+            @param x: input training data
+            @param y: output training data (list of outputs if the model
+                      has multiple outputs)
+            @param batch_size: batch_size
+            @param n_epochs: Total number of epochs
+            @param callbacks: List of callbacks
+            @param validation_split: float between 0 and 1 representing the 
+                                    proportion of dataset to set aside as
+                                    validation
+            @param validation_data: data on which to evaluate loss and model
+                                    metrixs
+            @param initial_epoch: epoch at which to start training
+                                    (useful for resuming from previous runs)
+        
+        Returns
+        -------
+            TrainingLog instance. This contains all information 
+            collected during training
+        """
+        assert(self.is_built)
+        #prepare test data
+        if(test_data is not None):
+            if(len(test_data) == 2):
+                x_test, y_test = test_data
+            else:
+                raise ValueError("test_data supplied to model.fit() must "
+                                "be a tuple/list of size 2 e.g. [x_test, y_test]")
+        else:
+            x_test = None
+            y_test = None
+            
+        #create dataset
+        dataset = DenseDataset(x, y, x_test, y_test, batch_size, validation_split,
+                               shuffle=shuffle)
+        
+        
+        return self._fit_dataset(dataset=dataset, n_epochs=n_epochs, 
+                                callbacks=callbacks,
+                                verbose=verbose, initial_epoch=initial_epoch)
+                                
+    def _fit_dataset(self, dataset, n_epochs, callbacks, verbose, 
+                     initial_epoch, outlabels=None):
+        
+        self.make_train_function()
+        self.make_test_function()
+        
+        outlabels = outlabels or []
+        #initialise callbacks
+        self.history = cbks.History()
+        callbacks = [cbks.BaseLogger()] + (callbacks or []) + [self.history]
+        callbacks = cbks.CallbackList(callbacks)
+        
+        #make it possible to call callbacks from a different model
+        if(hasattr(self, 'callback_model') and self.callback_model):
+            callback_model = self.callback_model
+        else:
+            callback_model = self
+        
+        callbacks.set_model(callback_model)
+        callbacks.set_params({
+            'batch_size': dataset.batchSize,
+            'n_epochs': n_epochs,
+            'verbose': verbose
+        })
+        callbacks.train_start()
+        
+        for epoch in range(initial_epoch, n_epochs):
+            callbacks.epoch_start(epoch)
+            if(dataset.shuffle):
+                dataset.shuffler()
+            epoch_logs = {}
+            x_train, y_train, x_valid, y_valid = dataset.validation_split()
+            
+            #iterate over batches
+            batch_index = 0
+            epoch_loss = 0
+            valid_loss = 0
+            for x_b, y_b in dataset(x_train, y_train):
+                batch_index += 1
+                batch_logs = {}
+                batch_logs['batch'] = batch_index
+                batch_logs['size'] = x_train.shape[0]
+                
+                callbacks.batch_start(batch_index, batch_logs)
+                loss = self.train_function(x_b, y_b)
+                loss = loss[0]
+                batch_logs['loss'] = loss
+                epoch_loss += loss
+                callbacks.batch_end(batch_index, batch_logs)
+                
+            valid_loss = self.test_function(x_valid, y_valid)
+            epoch_logs['loss'] = epoch_loss
+            epoch_logs['valid_loss'] = valid_loss
+            callbacks.epoch_end(epoch, epoch_logs)
+        
+        callbacks.train_end()
+        return self.history
+                    
+        
+        
+        
+        
+        
     ##To be implemented
                                        
     def build(self, input_shape):

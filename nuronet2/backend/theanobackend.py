@@ -51,6 +51,8 @@ class TheanoBackend(Backend):
     def tensor4(self, dtype=None, name=None):
         return self.variable(ndim=4, dtype=dtype, name=name)
         
+    def shared_shape(self, x):
+        return x.get_value(borrow=True, return_internal_type=True).shape
         
     def shape(self, x):
         return x.shape

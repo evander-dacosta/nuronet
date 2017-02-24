@@ -29,6 +29,9 @@ def get_objective(name):
 def mean_squared_error():
     return MSE()
     
+def mse():
+    return MSE()
+    
 def mse2():
     return MSE2()
     

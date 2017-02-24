@@ -22,7 +22,8 @@ class Dataset(object):
     def __iter__(self, X, Y):
         bs = self.batchSize
         numSamples = self.get_dataset_size(X)
-        for i in range(int((numSamples + bs - 1) // bs)):
+        self.n_batches = int((numSamples + bs - 1) // bs)
+        for i in range(self.n_batches):
             sl = slice(i * bs, (i + 1) * bs)
             Xb = _sldict(X, sl)
             if(Y is not None):

@@ -175,6 +175,10 @@ class TensorflowBackend(Backend):
     def tensor4(self, dtype=None, name=None):
         return self.variable(ndim=4, dtype=dtype, name=name)
         
+    def shared_shape(self, x):
+        shape = x.get_shape()
+        return tuple([i.__int__() for i in shape])
+
     def shape(self, x):
         return tf.shape(x)
         
