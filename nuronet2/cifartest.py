@@ -6,7 +6,7 @@ Created on Sat Nov 19 20:19:04 2016
 """
 
 from nuronet2.base import *
-from nuronet2.dataset.cifar10 import Cifar10Dataset
+from nuronet2.dataset.cifar10 import loadCifar, Cifar10Dataset
 from nuronet2.layers import *
 from nuronet2.optimisers import *
 from test import *
@@ -16,8 +16,9 @@ from test import *
         
 if __name__ == "__main__":
     folderName='/home/evander/Dropbox/data/cifar-10'
-    data = Cifar10Dataset(folderName=folderName, limit=3,
-                          batchSize=32, validation=0.1)
+    X, Y, XTest, YTest = loadCifar(folderName, limit=5, flatten=False)
+    
+    data = TestIterator(X, Y, batch_size=32, shuffle=True)
     
     net = NeuralNetwork((3, 32, 32))
     
@@ -38,8 +39,8 @@ if __name__ == "__main__":
     
     
     net.compile('adam', 'categorical_crossentropy')
-    net.fit_dataset(data, 20)
+    net.fit_generator(data, 100, 20)
     
-    net.load_weights("cifar.nnet")
-    yPred = model.get_predictor()
-    print data.accuracy(yPred, limit=1000)
+    """net.load_weights("cifarNet")
+    yPred = net.predict
+    print data.accuracy(yPred, limit=1000)"""

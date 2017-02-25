@@ -6,6 +6,9 @@ Created on Wed Nov 16 23:54:21 2016
 """
 import numpy
 import time
+import threading
+import multiprocessing
+
 from nuronet2.backend import N
 from collections import OrderedDict
 from nuronet2.dataset import DenseDataset
@@ -13,6 +16,11 @@ from nuronet2.objectives import get_objective
 
 from nuronet2.optimisers import get_optimiser
 import nuronet2.callbacks as cbks
+
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 def make_list(x):
     """Normalises a list/tensor into a list
@@ -451,7 +459,7 @@ class MLModel(object):
         
         Returns
         -------
-            TrainingLog instance. This contains all information 
+            History instance. This contains all information 
             collected during training
         """
         assert(self.is_built)
@@ -474,6 +482,115 @@ class MLModel(object):
         return self.fit_dataset(dataset=dataset, n_epochs=n_epochs, 
                                 callbacks=callbacks,
                                 verbose=verbose, initial_epoch=initial_epoch)
+                                
+    def fit_generator(self, generator, samples_per_epoch, n_epochs,
+                      verbose=True, callbacks=None, max_q_size=10,
+                      n_workers=1, pickle_safe=False, initial_epoch=0):
+        """
+        Fits the model on data generated batch-by-batch by a python
+        generator. The generator runs in parallel ith the model.
+        
+        For example, the generator allows us to do data augmentation on the 
+        CPU while the model trains on the GPU
+        
+        Inputs
+        ------
+            @param generator: A generator dataset type
+            @param samples_per_epoch: number of samples to process before
+                                      going to the next epoch
+            @param n_epochs: Total number of epochs
+            @param verbose : Print out per-epoch metrics?
+            @param callbacks: List of callbacks
+            @param max_q_size: Maximum size for the generator queue
+            @param n_workers: Number of processes to spin up when using 
+                             process-based threading
+            @param pickle_safe: If True, use process-based threading
+            @param initial_epoch: Epoch at which to start training
+        Returns
+        -------
+            History instance. This contains all information 
+            collected during training 
+        """
+        wait_time = 0.01 #seconds
+        epoch = initial_epoch
+        self.make_train_function()
+        self.make_test_function()
+        
+        self.history = cbks.History()
+        callbacks = (callbacks or []) + [self.history]
+        if(verbose):
+            callbacks += [cbks.TrainLogger()]
+        callbacks = cbks.CallbackList(callbacks)
+        
+        #make it possible to call callbacks from a different model
+        if(hasattr(self, 'callback_model') and self.callback_model):
+            callback_model = self.callback_model
+        else:
+            callback_model = self
+            
+        callbacks.set_model(callback_model)
+        callbacks.set_params({
+            'batch_size': generator.batch_size,
+            'n_epochs': n_epochs,
+            'verbose': verbose
+        })
+        callbacks.train_start()
+        
+        enqueuer = None
+        
+        try:
+            enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
+            enqueuer.start(max_q_size=max_q_size, n_workers=n_workers)
+            
+            while(epoch < n_epochs):
+                callbacks.epoch_start(epoch)
+                epoch_logs = {}
+                epoch_start_time = time.time()
+                
+                samples_seen = 0
+                batch_index = 0
+                epoch_loss = []
+                
+                
+                while(samples_seen < samples_per_epoch):
+                    generator_output = None
+                    while enqueuer.is_running():
+                        if not enqueuer.queue.empty():
+                            generator_output = enqueuer.queue.get()
+                            break
+                        else:
+                            time.sleep(wait_time)
+                            
+                    
+                    x, y = generator_output
+                    
+                    #build batch logs
+                    batch_logs = {}
+                    batch_size = x.shape[0]
+                    batch_logs['batch'] = batch_index
+                    batch_logs['size'] = batch_size
+                    callbacks.batch_start(batch_index, batch_logs)
+                    loss = self.train_function(x, y)
+                    epoch_loss += loss
+                    batch_logs['loss'] = loss[0]
+                    callbacks.batch_end(batch_index, batch_logs)
+                    
+                    
+                    batch_index += 1
+                    samples_seen += batch_size
+                #do validation here
+                epoch_logs['epoch'] = epoch
+                epoch_logs['train_loss'] = numpy.mean(epoch_loss)
+                #epoch_logs['valid_loss'] = valid_loss[0]
+                epoch_logs['epoch_time'] = time.time() - epoch_start_time
+                callbacks.epoch_end(epoch, epoch_logs)
+                epoch += 1
+        finally:
+            if(enqueuer is not None):
+                enqueuer.stop()
+        callbacks.train_end()
+        return self.history
+        
                                 
     def fit_dataset(self, dataset, n_epochs, callbacks=None, verbose=True, 
                      initial_epoch=0):
@@ -536,8 +653,6 @@ class MLModel(object):
         
         callbacks.train_end()
         return self.history
-                    
-        
         
         
         
@@ -561,4 +676,91 @@ class MLModel(object):
         
     def get_updates(self):
         return OrderedDict()
+        
+        
+        
+        
+
+
+class GeneratorEnqueuer(object):
+    """
+    Builds a queue out of a data generator
+    
+    Inputs
+    ------
+        @param generator: A generator dataset instance
+        @param pickle_safe: use multiprocessing if True, else use threading
+    """
+    def __init__(self, generator, pickle_safe=False):
+        self._generator = generator
+        self._pickle_safe = pickle_safe
+        self._threads = []
+        self._stop_event = None
+        
+        self.queue = None
+        
+    def start(self, n_workers=1, max_q_size=10, wait_time=0.05):
+        """
+            Kick off threads which add data from the generator into the queue.
+            Inputs
+            ------
+                @param n_workers: number of worker threads
+                @param max_q_size: queue size (when full, threads could block on put())
+                @param wait_time: time to sleep in-between calls to put()
+        """
+        def data_generator_task():
+            while not self._stop_event.is_set():
+                try:
+                    if(self._pickle_safe or self.queue.qsize() < max_q_size):
+                        generator_output = next(self._generator)
+                        self.queue.put(generator_output)
+                    else:
+                        time.sleep(wait_time)
+                except Exception:
+                    self._stop_event.set()
+                    raise
+        try:
+            if(self._pickle_safe):
+                self.queue = multiprocessing.Queue(maxsize=max_q_size)
+                self._stop_event = multiprocessing.Event()
+            else:
+                self.queue = queue.Queue()
+                self._stop_event = threading.Event()
+            for i in range(n_workers):
+                if(self._pickle_safe):
+                    #reset seed so children don't share same seed
+                    numpy.random.seed()
+                    thread = multiprocessing.Process(target=data_generator_task)
+                    thread.daemon = True
+                else:
+                    thread = threading.Thread(target=data_generator_task)
+                self._threads.append(thread)
+                thread.start()
+        except:
+            self.stop()
+            raise
+            
+    def is_running(self):
+        return self._stop_event is not None and not self._stop_event.is_set()
+        
+    def stop(self, timeout=None):
+        """
+        Stop running threads and wait for them to exit, if necessary.
+        Should be called by the same thread which called start().
+        """
+        if(self.is_running()):
+            self._stop_event.set()
+        for thread in self._threads:
+            if(thread.is_alive()):
+                if(self._pickle_safe):
+                    thread.terminate()
+                else:
+                    thread.join(timeout)
+                    
+        if(self._pickle_safe):
+            if(self.queue is not None):
+                self.queue.close()
+        self._threads = []
+        self._stop_event = None
+        self.queue = None
     
