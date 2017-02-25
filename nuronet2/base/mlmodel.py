@@ -475,7 +475,9 @@ class MLModel(object):
             y_test = None
             
         #create dataset
-        dataset = DenseDataset(x, y, x_test, y_test, batch_size, validation_split,
+        dataset = DenseDataset(x=x, y=y, x_test=x_test,
+                               y_test=y_test, batch_size=batch_size,
+                               validation=validation_split,
                                shuffle=shuffle)
         
         
@@ -483,7 +485,7 @@ class MLModel(object):
                                 callbacks=callbacks,
                                 verbose=verbose, initial_epoch=initial_epoch)
                                 
-    def fit_generator(self, generator, samples_per_epoch, n_epochs,
+    def fit_generator(self, generator, n_epochs,
                       verbose=True, callbacks=None, max_q_size=10,
                       n_workers=1, pickle_safe=False, initial_epoch=0):
         """
@@ -496,8 +498,6 @@ class MLModel(object):
         Inputs
         ------
             @param generator: A generator dataset type
-            @param samples_per_epoch: number of samples to process before
-                                      going to the next epoch
             @param n_epochs: Total number of epochs
             @param verbose : Print out per-epoch metrics?
             @param callbacks: List of callbacks
@@ -551,8 +551,10 @@ class MLModel(object):
                 batch_index = 0
                 epoch_loss = []
                 
-                
-                while(samples_seen < samples_per_epoch):
+                #Make the generator generate indices for training and validation
+                generator.make_validation_splits()
+    
+                while(samples_seen < generator.n):
                     generator_output = None
                     while enqueuer.is_running():
                         if not enqueuer.queue.empty():
@@ -579,9 +581,12 @@ class MLModel(object):
                     batch_index += 1
                     samples_seen += batch_size
                 #do validation here
+                if(len(generator.valid_indices) > 0):
+                    valid_loss = self.test_function(generator.x_valid,
+                                                    generator.y_valid)
+                    epoch_logs['valid_loss'] = valid_loss[0]
                 epoch_logs['epoch'] = epoch
                 epoch_logs['train_loss'] = numpy.mean(epoch_loss)
-                #epoch_logs['valid_loss'] = valid_loss[0]
                 epoch_logs['epoch_time'] = time.time() - epoch_start_time
                 callbacks.epoch_end(epoch, epoch_logs)
                 epoch += 1
@@ -613,7 +618,7 @@ class MLModel(object):
         
         callbacks.set_model(callback_model)
         callbacks.set_params({
-            'batch_size': dataset.batchSize,
+            'batch_size': dataset.batch_size,
             'n_epochs': n_epochs,
             'verbose': verbose
         })
@@ -622,29 +627,37 @@ class MLModel(object):
         for epoch in range(initial_epoch, n_epochs):
             callbacks.epoch_start(epoch)
             epoch_start_time = time.time()
-            if(dataset.shuffle):
-                dataset.shuffler()
             epoch_logs = {}
-            x_train, y_train, x_valid, y_valid = dataset.validation_split()
+            
+            #Make the generator generate indices for training and validation
+            dataset.make_validation_splits()
+            
             
             #iterate over batches
             batch_index = 0
             epoch_loss = []
             valid_loss = 0
-            for x_b, y_b in dataset(x_train, y_train):
+            samples_seen = 0
+            while(samples_seen < dataset.n):
                 batch_index += 1
                 batch_logs = {}
                 batch_logs['batch'] = batch_index
-                batch_logs['size'] = x_train.shape[0]
+                batch_logs['size'] = dataset.batch_size
                 
                 callbacks.batch_start(batch_index, batch_logs)
+                x_b, y_b = dataset.next()
                 loss = self.train_function(x_b, y_b)
                 epoch_loss += loss
                 batch_logs['loss'] = loss[0]
                 epoch_loss += loss
                 callbacks.batch_end(batch_index, batch_logs)
                 
-            valid_loss = self.test_function(x_valid, y_valid)
+                #increment counters
+                batch_index += 1
+                samples_seen += x_b.shape[0]
+                
+            valid_loss = self.test_function(dataset.x_valid, 
+                                            dataset.y_valid)
             epoch_logs['epoch'] = epoch
             epoch_logs['train_loss'] = numpy.mean(epoch_loss)
             epoch_logs['valid_loss'] = valid_loss[0]

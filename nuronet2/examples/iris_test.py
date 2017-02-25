@@ -18,13 +18,12 @@ if __name__ == "__main__":
     #fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
     X, Y, XTest, YTest = Iris.readFile(fName, dtype=N.default_dtype)
     
-    model = NeuralNetwork()
-    model.add(InputLayer((3,)))
+    model = NeuralNetwork((3,))
     model.add(DenseLayer(100, w_regulariser={'name':'l2', 'l2':1e-4},
                         activation="tanh2"))
     model.add(DenseLayer(3, activation="softmax"))
     model.compile('adam', "categorical_crossentropy")
-    h = model.fit(X, Y, batch_size=2, n_epochs=20)
+    h = model.fit(X, Y, batch_size=8, n_epochs=20)
     
     test = numpy.argmax(model.predict(XTest), axis=1)
     real = YTest.nonzero()[1]

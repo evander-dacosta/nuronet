@@ -64,10 +64,11 @@ def loadCifar(folder, limit = 5, flatten = False):
 class Cifar10Dataset(DenseDataset):
     def  __init__(self, folderName,
                    limit = 5, flatten = False, validation = 0.,
-                   batchSize = 10):
+                   batch_size = 10):
         self.flatten = flatten
-        X, Y, XTest, YTest = loadCifar(folderName, limit = limit, flatten = flatten)
-        DenseDataset.__init__(self, X, Y, XTest, YTest, batchSize = batchSize, validation = validation)
+        X, Y, XTest, YTest = loadCifar(folderName, limit=limit, flatten=flatten)
+        DenseDataset.__init__(self, X, Y, XTest, YTest, batch_size=batch_size,
+                              validation=validation)
         
     def plot(self, image):
         plotCifar(self.XTest[image])

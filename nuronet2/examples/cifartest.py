@@ -12,14 +12,17 @@ from nuronet2.optimisers import *
 from test import *
 
 
-
+"""
+Because cifar files are so large,
+we use net.fit_generator() to train
+"""
         
 if __name__ == "__main__":
     folderName='/home/evander/Dropbox/data/cifar-10'
     X, Y, XTest, YTest = loadCifar(folderName, limit=5, flatten=False)
     
-    data = TestIterator(X, Y, batch_size=32, shuffle=True)
-    
+    data = TestIterator(X, Y, batch_size=32, shuffle=True, validation=0.001)
+
     net = NeuralNetwork((3, 32, 32))
     
     net.add(Conv2dLayer((32, 3, 3), activation="relu"))
@@ -39,7 +42,7 @@ if __name__ == "__main__":
     
     
     net.compile('adam', 'categorical_crossentropy')
-    net.fit_generator(data, 100, 20)
+    history = net.fit_generator(data, 20)
     
     """net.load_weights("cifarNet")
     yPred = net.predict

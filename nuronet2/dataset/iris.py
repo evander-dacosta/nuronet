@@ -58,14 +58,12 @@ class Iris(object):
 
 class IrisDataset(DenseDataset):
 
-    def __init__(self, batchSize=1, fName="/home/evander/Desktop/data/iris/iris.data",
-                 validation=0., shuffle=False, supervised=True):
-        X, Y, XTest, YTest = Iris.readFile(fName, dtype=N.default_dtype)
-        DenseDataset.__init__(self, X, Y, XTest, YTest, batchSize=batchSize,
-                              validation=validation, shuffle=shuffle,
-                              supervised=supervised)
+    def __init__(self, batch_size=1, f_name="/home/evander/Dropbox/data/iris/iris.data",
+                 validation=0., shuffle=False):
+        X, Y, XTest, YTest = Iris.readFile(f_name, dtype=N.default_dtype)
+        DenseDataset.__init__(self, X, Y, XTest, YTest, batch_size=batch_size,
+                              validation=validation, shuffle=shuffle)
         
 if __name__ == "__main__":
-    iris = IrisDataset(batchSize=5, validation=0.1)
-    x, y, xValid, yValid = iris.validation_split()
+    iris = IrisDataset(batch_size=5, validation=0.1)
         
