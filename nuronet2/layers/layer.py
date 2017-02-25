@@ -54,7 +54,9 @@ class DenseLayer(Layer):
             
     def get_output_shape(self, input_shape):
         assert input_shape and len(input_shape) >= 2
-        assert input_shape[-1] and input_shape[-1] == self.input_dim
+        assert input_shape[-1]
+        if(self.input_dim):
+             assert input_shape[-1] == self.input_dim
         output_shape = list(input_shape)
         output_shape[-1] = self.n
         return tuple(output_shape)

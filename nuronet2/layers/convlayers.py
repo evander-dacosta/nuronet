@@ -6,11 +6,11 @@ Created on Mon Nov 21 13:24:02 2016
 """
 
 import numpy
-from nuronet2.base import get_weightfactory, get_regulariser, MLModel
+from nuronet2.base import get_weightfactory, get_regulariser, MLModel, Layer
 from nuronet2.activations import get_activation
 from nuronet2.backend import N
 
-class Conv2dLayer(MLModel):
+class Conv2dLayer(Layer):
     def __init__(self, n, 
                  weight_factory="xavier_uniform",
                  activation="linear", border_mode='valid', strides=(1, 1),
@@ -82,7 +82,7 @@ class Conv2dLayer(MLModel):
         return (input_shape[0], self.n_features, output_height, output_width)
         
         
-class Maxpool2d(MLModel):
+class Maxpool2d(Layer):
     def __init__(self, pool_size=(2, 2), strides=(1, 1), 
                  ignore_border=False, pad=(0, 0), **kwargs):
         self.pool_size = pool_size
