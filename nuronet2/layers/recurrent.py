@@ -78,6 +78,8 @@ class Recurrent(Layer):
     def get_output_shape(self, input_shape):
         if(self.return_sequences):
             return (input_shape[0], input_shape[1], self.n)
+        else:
+            return (input_shape[0], self.n)
     
     def make_initial_states(self, x):
         # build an all zero tensor of shape (samples, output_dim)

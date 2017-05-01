@@ -19,9 +19,9 @@ we use net.fit_generator() to train
         
 if __name__ == "__main__":
     folderName='/home/evander/Dropbox/data/cifar-10'
-    X, Y, XTest, YTest = loadCifar(folderName, limit=5, flatten=False)
-    
-    data = TestIterator(X, Y, batch_size=32, shuffle=True, validation=0.001)
+
+    data = Cifar10Dataset(folderName, limit=5, flatten=False, 
+                          batch_size=32, validation=0.0001)
 
     net = NeuralNetwork((3, 32, 32))
     
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     
     
     net.compile('adam', 'categorical_crossentropy')
-    history = net.fit_generator(data, 20)
+    history = net.fit_dataset(data, 20)
     
     """net.load_weights("cifarNet")
     yPred = net.predict

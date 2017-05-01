@@ -12,7 +12,7 @@ import numpy
 import scipy.io
 
 from nuronet2.base import MLModel, NetworkModel, NeuralNetwork
-from nuronet2.layers import InputLayer, DenseLayer, RNNLayer
+from nuronet2.layers import DenseLayer, RNNLayer
 
 
 class SpikeLoader:
@@ -48,8 +48,7 @@ if __name__ == "__main__":
     x = spikeLoader.x.reshape((data_size, chunk_size, 1))
     y = spikeLoader.y.reshape((data_size, chunk_size, 1))
     
-    model = NeuralNetwork()
-    model.add(InputLayer((None, 1)))
+    model = NeuralNetwork((None, 1))
     model.add(RNNLayer(64, input_shape=(None, 1)))
     model.add(DenseLayer(1, activation="sigmoid", input_shape=(None, None, 64)))
     

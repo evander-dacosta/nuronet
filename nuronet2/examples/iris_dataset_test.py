@@ -23,7 +23,7 @@ if __name__ == "__main__":
                         activation="tanh2"))
     model.add(DenseLayer(3, activation="softmax"))
     
-    model.compile('adam', "categorical_crossentropy")
+    model.compile('rmsprop', "categorical_crossentropy")
     h = model.fit_generator(data, n_epochs=20)
     
     test = numpy.argmax(model.predict(XTest), axis=1)

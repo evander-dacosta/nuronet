@@ -28,8 +28,8 @@ class MnistDataset(DenseDataset):
         self.singleChannel = single_channel
 
         X, Y, XTest, YTest = mnistLoader(fName, limit)
-        Y = Y.astype('int32')
-        YTest = YTest.astype('int32')
+        Y = self.to_one_hot(Y)
+        YTest = self.to_one_hot(YTest)
         if(not flatten):
             if(self.singleChannel):
                 X = X.reshape(X.shape[0], 1, 28, 28)
@@ -43,7 +43,17 @@ class MnistDataset(DenseDataset):
                 XTest = XTest.reshape(XTest.shape[0], 1, XTest.shape[-1])
 
         DenseDataset.__init__(self, X, Y, XTest, YTest,
-                              batchSize = batch_size, validation=validation)
+                              batch_size = batch_size, validation=validation)
+
+    
+    @staticmethod
+    def to_one_hot(labels):
+        n_labels = labels.shape[0]
+        idx_offset = numpy.arange(n_labels) * 10
+        one_hot = numpy.zeros((n_labels, 10)).astype(numpy.int32)
+        one_hot.flat[idx_offset + labels.ravel()] = 1
+        return one_hot
+        
 
     def plot(self, image):
         if(isinstance(image, int)):

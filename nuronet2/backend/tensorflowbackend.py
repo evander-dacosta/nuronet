@@ -11,6 +11,8 @@ import os
 import warnings
 import copy
 import tensorflow as tf
+from tensorflow.python.ops import tensor_array_ops
+from tensorflow.python.ops import control_flow_ops
 from backend import Backend
 
 default_dtype = tf.float32
@@ -81,6 +83,21 @@ class TensorflowBackend(Backend):
         
         
     #--------------------Tensorflow-related stuff-------------------------#
+    def _initialize_variables(self):
+        variables = tf.global_variables()
+        uninitialized_variables = []
+        for v in variables:
+            if(not hasattr(v, '_n_initialized') or not v._n_initialized):
+                uninitialized_variables.append(v)
+                v._n_initialized = True
+        if uninitialized_variables:
+            sess = self.get_session()
+            sess.run(tf.variables_initializer(uninitialized_variables))
+            
+    def eval(self, variables):
+        f = self.function([], variables)
+        return f()
+
     def backend(self):
         return 'tensorflow'
 
@@ -118,6 +135,8 @@ class TensorflowBackend(Backend):
                 n_threads = int(os.environ.get("OMP_NUM_THREADS"))
                 self._session = tf.Session(config=tf.ConfigProto(intra_op_parallelism_threads=n_threads,
                                                            allow_soft_placement=True))
+        with self._session.graph.as_default():
+            self._initialize_variables()
         return self._session
         
     def set_session(self, session):
@@ -191,8 +210,13 @@ class TensorflowBackend(Backend):
         Returns the shape of a tensor as a tuple of ints
         or None entries. Works only with Tensorflow
         """
+        if(hasattr(x, '_nuro_shape')):
+            return x._nuro_shape
         shape = x.get_shape()
-        return tuple([i.__int__() for i in shape])
+        try:
+            return tuple([i.__int__() for i in shape])
+        except ValueError:
+            return None
         
     def ndim(self, x):
         dims = x.get_shape()._dims
@@ -229,10 +253,8 @@ class TensorflowBackend(Backend):
         return tf.cast(x, dtype=_str_dtype(dtype))
         
     def stack(self, x):
-        try:
-            return tf.stack(x)
-        except AttributeError:
-            return tf.pack(x)
+        return tf.stack(x)
+
         
     def repeat(self, x, n):
         """Repeats a 2D tensor.
@@ -250,13 +272,27 @@ class TensorflowBackend(Backend):
         
     def dot(self, x, y):
         if(self.ndim(x) is not None and (self.ndim(x) > 2 or self.ndim(y) > 2)):
-            x_shape = (-1, ) + self.tf_shape(x)[1:]
-            y_shape = self.tf_shape(y)
+            x_shape = []
+            for i, s in zip(self.int_shape(x), tf.unstack(tf.shape(x))):
+                if(i is not None):
+                    x_shape.append(i)
+                else:
+                    x_shape.append(s)
+            x_shape = tuple(x_shape)
+            y_shape = []
+            for i, s in zip(self.int_shape(y), tf.unstack(tf.shape(y))):
+                if(i is not None):
+                    y_shape.append(i)
+                else:
+                    y_shape.append(s)
+            y_shape = tuple(y_shape)
             y_permute_dim = list(range(self.ndim(y)))
             y_permute_dim = [y_permute_dim.pop(-2)] + y_permute_dim
             xt = tf.reshape(x, [-1, x_shape[-1]])
-            yt = tf.reshape(tf.transpose(y, perm=y_permute_dim), [y_shape[-2], -1])
-            return tf.reshape(tf.matmul(xt, yt), x_shape[:-1] + y_shape[:-2] + y_shape[-1:])
+            yt = tf.reshape(tf.transpose(y, perm=y_permute_dim), 
+                            [y_shape[-2], -1])
+            return tf.reshape(tf.matmul(xt, yt),
+                              x_shape[:-1] + y_shape[:-2] + y_shape[-1:])
         out = tf.matmul(x, y)
         return out
         
@@ -426,7 +462,7 @@ class TensorflowBackend(Backend):
         return tf.reshape(x, [-1])
         
     def batch_flatten(self, x, **kwargs):
-        x = tf.reshape(x, tf.pack([-1, self.prod(self.shape(x)[1:])]))
+        x = tf.reshape(x, tf.stack([-1, self.prod(self.shape(x)[1:])]))
         return x
         
     #VALUE OPS
@@ -561,94 +597,88 @@ class TensorflowBackend(Backend):
     def reverse(self, x, axes):
         if(isinstance(axes, int)):
             axes = [axes]
-        try:
-            tf.reverse_v2(x, axes)
-        except AttributeError:
-            #older tf
-            dims = [True if i in axes else False for i in range(len(x.get_shape()._dims))]
-            return tf.reverse(x, dims)
+        return tf.reverse(x, axes)
         
     def recurrence(self, step_function, inputs, initial_states,
             unroll=False,
             go_backwards=False, constants=None, input_length=None):
         ndim = len(inputs.get_shape())
         if(ndim < 3):
-            raise ValueError('Input should be at least 3D')
+            raise ValueError("Input should be at least 3D")
         axes = [1, 0] + list(range(2, ndim))
         inputs = tf.transpose(inputs, (axes))
         
         if(constants is None):
             constants = []
             
-        if(hasattr(tf, 'select')):
-            tf.where = tf.select
-        if(hasattr(tf, 'stack')):
-            stack = tf.stack
-            unstack = tf.unstack
-        else:
-            stack = tf.pack
-            unstack = tf.unpack
-            
         if(unroll):
             if(not inputs.get_shape()[0]):
-                raise ValueError('Unrolling requires a fixed '
-                                 'number of timesteps')
+                raise ValueError("Unrolling requires a fixed "
+                                 "number of timesteps")
             states = initial_states
             successive_states = []
             successive_outputs = []
             
-            input_list = unstack(inputs)
+            input_list = tf.unstack(inputs)
             if(go_backwards):
                 input_list.reverse()
-            for input in input_list:
-                output, states = step_function(input, states + constants)
+            for inp in input_list:
+                output, states = step_function(inp, states+constants)
                 successive_outputs.append(output)
                 successive_states.append(states)
             last_output = successive_outputs[-1]
             new_states = successive_states[-1]
-            outputs = stack(successive_outputs)
+            outputs = tf.stack(successive_outputs)
+        
         else:
             if(go_backwards):
                 inputs = self.reverse(inputs, 0)
-            states = tuple(initial_states)
             
+            states = tuple(initial_states)
             time_steps = tf.shape(inputs)[0]
-            output_ta = tensor_array_ops.TensorArray(dtype=inputs.dtype,
+            outputs, _ = step_function(inputs[0], initial_states+constants)
+            output_ta = tensor_array_ops.TensorArray(
+                                                     dtype=outputs.dtype,
                                                      size=time_steps,
                                                      tensor_array_name='output_ta')
-            input_ta = tensor_array_ops.TensorArray(dtype=inputs.dtype,
+            input_ta = tensor_array_ops.TensorArray(
+                                                    dtype=inputs.dtype,
                                                     size=time_steps,
                                                     tensor_array_name='input_ta')
-            if(hasattr(input_ta, 'unstack')):
-                input_ta = input_ta.unstack(inputs)
-            else:
-                input_ta = input_ta.unpack(inputs)
+            input_ta = input_ta.unstack(inputs)
             time = tf.constant(0, dtype='int32', name='time')
             
             def _step(time, output_ta_t, *states):
+                """
+                RNN step function
+                # Args
+                @param time: Current timestep
+                @param output_ta_t: TensorArray
+                *states: List of states
+                
+                # Returns
+                  tuple: (time+1, output_ta_t) + tuple(new_states)
+                """
                 current_input = input_ta.read(time)
                 output, new_states = step_function(current_input,
-                                                    tuple(states) + 
-                                                    tuple(constants))
+                                                   tuple(states)+
+                                                   tuple(constants))
                 for state, new_state in zip(states, new_states):
                     new_state.set_shape(state.get_shape())
                 output_ta_t = output_ta_t.write(time, output)
                 return (time + 1, output_ta_t) + tuple(new_states)
-            
+                
             final_outputs = control_flow_ops.while_loop(
-                cond=lambda time, *_: time < time_steps,
-                body=_step,
-                loop_vars=(time, output_ta) + states,
-                parallel_iterations=32,
-                swap_memory=True)
+                    cond=lambda time, *_: time < time_steps,
+                    body=_step,
+                    loop_vars=(time, output_ta) + states,
+                    parallel_iterations=32,
+                    swap_memory=True)
             last_time = final_outputs[0]
             output_ta = final_outputs[1]
             new_states = final_outputs[2:]
             
-            if(hasattr(output_ta, 'stack')):
-                outputs = output_ta.stack()
-            else:
-                outputs = output_ta.pack()
+            outputs = output_ta.stack()
             last_output = output_ta.read(last_time - 1)
         
         axes = [1, 0] + list(range(2, len(outputs.get_shape())))
@@ -679,7 +709,8 @@ class TensorflowBackend(Backend):
         if(not logit):
             output = self.clip(output, self._epsilon, 1 - self._epsilon)
             output = tf.log(output / (1 - output))
-        return tf.nn.sigmoid_cross_entropy_with_logits(output, target)
+        return tf.nn.sigmoid_cross_entropy_with_logits(logits=output, 
+                                                       labels=target)
             
         
     def categorical_crossentropy(self, output, target, logit=False):
@@ -690,7 +721,8 @@ class TensorflowBackend(Backend):
             return -tf.reduce_sum(target * tf.log(output), 
                                   reduction_indices=len(output.get_shape()) - 1)
         else:
-            return tf.nn.softmax_cross_entropy_with_logits(output, target)
+            return tf.nn.softmax_cross_entropy_with_logits(logits=output, 
+                                                           labels=target)
             
         
     def softmax(self, x):
