@@ -1,9 +1,9 @@
 
 from nuronet2.base import MLModel, NetworkModel, MLConnection, get_source_inputs
-from layer import Layer, InputLayer
+from layer import Layer, InputLayer, Input
 
 class NeuralNetwork(MLModel):
-    def __init__(self, input_shape, layers=None, name=None, **kwargs):
+    def __init__(self, layers=None, name=None, **kwargs):
         self.layers = []
         self.model = None #internal model instance
         self.inputs = []
@@ -16,7 +16,7 @@ class NeuralNetwork(MLModel):
         self._non_trainable_weights = None
         
         
-        self.add(InputLayer(input_shape))
+        #self.add(InputLayer(input_shape))
         if(layers):
             for layer in layers:
                 self.add(layer)
@@ -56,10 +56,10 @@ class NeuralNetwork(MLModel):
         if(not isinstance(layer, Layer)):
             raise TypeError("The added layer must be an instance "
                             "of class Layer. Found {}".format(type(layer)))
-        if(not self.outputs):
+        if(not self.outputs): 
             if(len(layer.inbound_connections) == 0):
                 #create an input layer
-                if(not hasattr(layer, 'input_shape')):
+                if(not hasattr(layer, 'input_shape') or layer.input_shape is None):
                     raise ValueError("The first layer in a NeuralNetwork "
                                      "model must have an 'input_shape'")
                 input_shape = layer.input_shape
@@ -67,8 +67,10 @@ class NeuralNetwork(MLModel):
                     input_dtype = layer.input_dtype
                 else:
                     input_dtype = None
-                print input_shape
-                layer.create_input_layer(input_shape, input_dtype)
+                
+                self.add(InputLayer(input_shape=input_shape))
+                self.add(layer)
+                return
             
             if(len(layer.inbound_connections) != 1):
                 raise ValueError("The layer added to NeuralNetwork model "

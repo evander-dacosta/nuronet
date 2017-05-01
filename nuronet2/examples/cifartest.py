@@ -20,12 +20,12 @@ we use net.fit_generator() to train
 if __name__ == "__main__":
     folderName='/home/evander/Dropbox/data/cifar-10'
 
-    data = Cifar10Dataset(folderName, limit=5, flatten=False, 
+    data = Cifar10Dataset(folderName, limit=1, flatten=False, 
                           batch_size=32, validation=0.0001)
 
-    net = NeuralNetwork((3, 32, 32))
+    net = NeuralNetwork()
     
-    net.add(Conv2dLayer((32, 3, 3), activation="relu"))
+    net.add(Conv2dLayer((32, 3, 3), activation="relu", input_shape=(3, 32, 32)))
     net.add(Conv2dLayer((32, 3, 3), activation="relu"))
     net.add(Maxpool2d(pool_size=(2, 2), strides=(1, 1)))
     net.add(Dropout(0.25))

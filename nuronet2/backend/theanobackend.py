@@ -116,6 +116,12 @@ class TheanoBackend(Backend):
         x = x.dimshuffle((0, 'x', 1))
         return T.extra_ops.repeat(x, n, axis=1)
         
+    def permute_dimensions(self, x, pattern):
+        pattern = tuple(pattern)
+        y = x.dimshuffle(pattern)
+        if(hasattr(x, '_nuro_shape')):
+            y._nuro_shape = tuple(numpy.array(x._nuro_shape)[list(pattern)])
+        return y
 
     # LINEAR ALGEBRA OPS
         

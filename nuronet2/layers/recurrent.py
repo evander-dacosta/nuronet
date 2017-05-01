@@ -73,6 +73,13 @@ class Recurrent(Layer):
         self.input_length = input_length
         if(self.input_dim):
             kwargs['input_shape'] = (self.input_length, self.input_dim)
+        elif('input_shape' in kwargs):
+            if(len(kwargs['input_shape']) != 2):
+                raise ValueError("The input_shape to a Recurrent Layer "
+                                 "must be of the form (input_length, input_dim). "
+                                 "Instead got a tuple of the wrong shape.")
+            self.input_dim = kwargs['input_shape'][-1]
+            self.input_length = kwargs['input_shape'][-2]
         Layer.__init__(self, **kwargs)
         
     def get_output_shape(self, input_shape):

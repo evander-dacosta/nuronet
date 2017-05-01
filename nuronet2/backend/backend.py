@@ -102,6 +102,8 @@ class Backend(object):
     def cast(self, x):
         raise NotImplementedError()
         
+    def permute_dimensions(self, x, pattern):
+        raise NotImplementedError()
         
     # LINEAR ALGEBRA OPS
         

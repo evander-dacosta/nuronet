@@ -18,9 +18,9 @@ if __name__ == "__main__":
     #fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
     data = IrisDataset(batch_size=8, validation=0.1)
     
-    model = NeuralNetwork((3,))
+    model = NeuralNetwork()
     model.add(DenseLayer(100, w_regulariser={'name':'l2', 'l2':1e-4},
-                        activation="tanh2"))
+                        activation="tanh2", input_shape=(3,)))
     model.add(DenseLayer(3, activation="softmax"))
     
     model.compile('rmsprop', "categorical_crossentropy")

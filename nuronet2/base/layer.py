@@ -10,34 +10,9 @@ from mlmodel import MLModel, MLConnection
 class Layer(MLModel):
     def __init__(self, **kwargs):
         MLModel.__init__(self, **kwargs)
-        
-    """def create_input_layer(self, input_shape, input_dtype=None,
-                           name=None):
-        \"""
-        Creates an input layer if the layer type is used without 
-        one being specified.
-        
-        Inputs
-        ------
-            @param input_shape: A tuple specifying the shape (with batchsize)
-                                of the layer
-            @param input_dtype: Input datatype
-            @param name: layer name
             
-        Returns
-        -------
-            InputLayer instance
-        \"""
-        if(not name):
-            prefix = self.__class__.__name__.lower() + '__input__'
-            name = prefix + str(N.get_uid(prefix))
-        if(not input_dtype):
-            input_dtype = N.floatx
-        self.input_shape = input_shape
-        self.input_dtype = input_dtype
-        x = Input(shape=input_shape, dtype=input_dtype, name=name)
-        return self(x)
-    """
+        
+
 class InputLayer(Layer):
     def __init__(self, input_shape, input_dtype=N.floatx, input_tensor=None,
                  name=None):
@@ -54,8 +29,8 @@ class InputLayer(Layer):
         MLConnection(self, inbound_models=[], connection_indices=[],
                      tensor_indices=[], input_tensors=[input_tensor],
                      output_tensors=[input_tensor],
-                     input_shapes=[self.input_shape],
-                     output_shapes=[self.input_shape])
+                     input_shapes=[self.batch_input_shape],
+                     output_shapes=[self.batch_input_shape])
                     
     def build(self, input_shape):
         self.is_built = True
@@ -67,7 +42,7 @@ class InputLayer(Layer):
         return N.cast(0.)
         
     def get_output_shape(self, input_shape):
-        return input_shape
+        return self.batch_input_shape
         
 
             

@@ -10,11 +10,11 @@ from nuronet2.layers import DenseLayer, RNNLayer
 
 if __name__ == "__main__":
     data = MnistDataset(fName="/home/evander/Dropbox/data/mnist/mnist.pkl.gz",
-                        batch_size=32, flatten=False, limit=None)
+                        batch_size=32, flatten=False, limit=5000)
     n_epochs = 30
-    model = NeuralNetwork((None, 28))
+    model = NeuralNetwork()
     model.add(RNNLayer(64, return_sequences=False, input_shape=(28, 28)))
-    model.add(DenseLayer(10, activation="softmax", input_shape=(None, 64)))
+    model.add(DenseLayer(10, activation="softmax"))
     
     model.compile("adam", "categorical_crossentropy")
     

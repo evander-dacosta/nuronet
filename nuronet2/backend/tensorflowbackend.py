@@ -268,6 +268,9 @@ class TensorflowBackend(Backend):
         pattern = self.stack([1, n, 1])
         return tf.tile(x, pattern)
         
+    def permute_dimensions(self, x, pattern):
+        return tf.transpose(x, perm=pattern)
+        
     # LINEAR ALGEBRA OPS
         
     def dot(self, x, y):

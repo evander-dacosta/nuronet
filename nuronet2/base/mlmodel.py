@@ -220,10 +220,20 @@ class MLModel(object):
             name = name + str(N.get_uid(name))
         self.name = name
         
-        if('input_shape' in kwargs):
-            self.input_shape = (None, ) + tuple(kwargs['input_shape'])
-        else:
-            self.input_shape = None
+        if('input_shape' in kwargs or 'batch_input_shape' in kwargs):
+            if('batch_input_shape' in kwargs):
+                batch_input_shape = tuple(kwargs['batch_input_shape'])
+                input_shape = batch_input_shape[1:]
+            elif('input_shape' in kwargs):
+                if('batch_size' in kwargs):
+                    batch_size = kwargs['batch_size']
+                else:
+                    batch_size = None
+                input_shape = tuple(kwargs['input_shape'])
+                batch_input_shape = (batch_size, ) + input_shape
+            self.batch_input_shape = batch_input_shape
+            self.input_shape = input_shape
+
         self.input_dtype = kwargs.get('input_dtype')
         
     def set_training(self, value):

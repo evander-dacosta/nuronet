@@ -48,9 +48,9 @@ if __name__ == "__main__":
     x = spikeLoader.x.reshape((data_size, chunk_size, 1))
     y = spikeLoader.y.reshape((data_size, chunk_size, 1))
     
-    model = NeuralNetwork((None, 1))
+    model = NeuralNetwork()
     model.add(RNNLayer(64, input_shape=(None, 1)))
-    model.add(DenseLayer(1, activation="sigmoid", input_shape=(None, None, 64)))
+    model.add(DenseLayer(1, activation="sigmoid"))
     
     model.compile('adam', 'binary_crossentropy')
     h = model.fit(x, y, batch_size=8, validation_split=0.1, n_epochs=400)
