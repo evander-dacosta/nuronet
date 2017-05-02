@@ -280,7 +280,6 @@ class LSTMLayer(Recurrent):
     def build(self, input_shape):
         if(isinstance(input_shape, list)):
             input_shape = input_shape[0]
-        batch_size = None
         self.input_dim = input_shape[2]
         
         self.states = [None, None]
@@ -317,8 +316,8 @@ class LSTMLayer(Recurrent):
     def _step(self, x, states):
         h_tm1 = states[0]
         c_tm1 = states[1]
-        dp_mask = states[2]
-        rec_dp_mask = states[3]
+        dp_mask = states[3]
+        rec_dp_mask = states[2]
         
         z = N.dot(x * dp_mask[0], self.W)
         z += N.dot(h_tm1 * rec_dp_mask[0], self.H)
@@ -337,6 +336,116 @@ class LSTMLayer(Recurrent):
         h = o * self.activation(c)
         return h, [h, c]
 
+        
+class GRULayer(Recurrent):
+    def __init__(self, n, activation="tanh", h_activation="hard_sigmoid",
+                 weight_factory="xavier_uniform", h_factory="orthogonal",
+                 w_regulariser=None, h_regulariser=None, b_regulariser=None,
+                 w_dropout=0., 
+                 h_dropout=0., **kwargs):
+        self.n = n
+        self.w_factory = get_weightfactory(weight_factory)
+        self.h_factory = get_weightfactory(h_factory)
+        self.activation = get_activation(activation)
+        self.h_activation = get_activation(h_activation)
+        self.w_regulariser = get_regulariser(w_regulariser)
+        self.b_regulariser = get_regulariser(b_regulariser)
+        self.h_regulariser = get_regulariser(h_regulariser)
+        self.dropout_w = min(1., max(0., w_dropout))
+        self.dropout_h = min(1., max(0., h_dropout))
+        
+        self.state_spec = [InputDetail(shape=(None, self.n)),
+                           InputDetail(shape=(None, self.n))]
+        super(GRULayer, self).__init__(**kwargs)
+    
+    def preprocess(self, x):
+        return x
+
+    def get_constants(self, x):
+        constants = []
+        if(0 < self.dropout_w < 1):
+            input_shape = N.int_shape(x)
+            input_dim = input_shape[-1]
+            ones = N.ones_like(N.reshape(x[:, 0, 0], (-1, 1)))
+            ones = N.tile(ones, (1, int(input_dim)))
+            if(self.is_training):
+                B_W = [N.dropout(ones, self.dropout_w) for _ in range(3)]
+            else:
+                B_W = [ones for _ in range(3)]
+            constants.append(B_W)
+        else:
+            constants.append([numpy.asarray(1., dtype=N.floatx) for _ in range(3)])
+
+        if(0 < self.dropout_h < 1):
+            ones = N.ones_like(N.reshape(x[:, 0, 0], (-1, 1)))
+            ones = N.tile(ones, (1, int(self.n)))
+            if(self.is_training):
+                B_H = [N.dropout(ones, self.dropout_h) for _ in range(3)]
+            else:
+                B_H = [ones for _ in range(3)]
+            constants.append(B_H)
+        else:
+            constants.append([numpy.asarray(1., dtype=N.floatx) for _ in range(3)])
+    
+        return constants
+
+
+    def build(self, input_shape):
+        if(isinstance(input_shape, list)):
+            input_shape = input_shape[0]
+        self.input_dim = input_shape[2]
+        
+        self.states = [None]
+        
+        self.W = self.w_factory(shape=(self.input_dim, self.n*3))
+        self.H = self.h_factory(shape=(self.n, self.n*3))
+        self.b = N.zeros(shape=(self.n * 3, ), name='bias')
+        
+        self.W_z = self.W[: , :self.n]
+        self.W_r = self.W[:, self.n : 2*self.n]
+        self.W_h = self.W[:, 2*self.n: ]
+        
+        self.H_z = self.H[:, :self.n]
+        self.H_r = self.H[:, self.n:2*self.n]
+        self.H_h = self.H[:, 2*self.n : ]
+        
+        self.b_z = self.b[:self.n]
+        self.b_r = self.b[self.n : 2*self.n]
+        self.b_h = self.b[2*self.n: ]
+
+        self.trainable_weights = [self.W, self.b, self.H]
+        self.built = True
+        
+            
+    def get_cost(self):
+        w_cost =  self.w_regulariser(self.W) if self.w_regulariser else N.cast(0.)
+        b_cost = self.b_regulariser(self.b) if self.b_regulariser else N.cast(0.)
+        h_cost =  self.h_regulariser(self.H) if self.h_regulariser else N.cast(0.)
+        return w_cost + b_cost + h_cost
+        
+    def _step(self, x, states):
+        h_tm1 = states[0]
+        dp_mask = states[1]
+        rec_dp_mask = states[2]
+        
+        matrix_x = N.dot(x * dp_mask[0], self.W) + self.b
+        matrix_inner = N.dot(h_tm1 * rec_dp_mask[0], 
+                             self.H[:, :2*self.n])
+        x_z = matrix_x[:, :self.n]
+        x_r = matrix_x[:, self.n:2*self.n]
+        h_z = matrix_inner[:, :self.n]
+        h_r = matrix_inner[:, self.n:2*self.n]
+        
+        z = self.h_activation(x_z + h_z)
+        r = self.h_activation(x_r + h_r)
+        
+        x_h = matrix_x[:, 2*self.n : ]
+        h_h = N.dot(r * h_tm1 * rec_dp_mask[0], self.H[:, 2*self.n : ])
+        
+        hh = self.activation(x_h + h_h)
+        
+        h = (z*h_tm1) + ((1 - z)*hh)
+        return h, [h]
 if __name__ == "__main__":
     r = Recurrent(input_dim=3)
     
