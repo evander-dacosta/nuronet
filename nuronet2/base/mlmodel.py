@@ -276,7 +276,6 @@ class MLModel(object):
             else:
                 inbound_models = None
                 break
-            
         
         if(inbound_models):
             self.add_inbound_connection(inbound_models, connection_indices, tensor_indices)
@@ -329,7 +328,14 @@ class MLModel(object):
         if(len(values) == 1):
             return values[0]
         return values
-                                       
+        
+    def get_input_tensors(self):
+        idxs = range(len(self.inbound_connections))
+        return [self.get_input_at(idx) for idx in idxs]
+                
+    def get_output_tensors(self):
+        idxs = range(len(self.inbound_connections))
+        return [self.get_output_at(idx) for idx in idxs]
                                        
     def get_input_shape_at(self, connection_index):
         return self.get_connection_attribute_at(connection_index, 'input_shapes')

@@ -441,11 +441,12 @@ class TensorflowBackend(Backend):
         
     def concat(self, tensors, axis=-1):
         if(axis < 0):
-            if(len(tensors[0].get_shape())):
-                axis = axis % len(tensors[0].get_shape())
+            rank = self.ndim(tensors[0])
+            if(rank):
+                axis %= rank
             else:
                 axis = 0
-        return tf.concat(axis, tensors)
+        return tf.concat(tensors, axis)
         
     def reshape(self, x, shape):
         return tf.reshape(x, shape)

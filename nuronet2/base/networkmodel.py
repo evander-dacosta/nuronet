@@ -449,10 +449,13 @@ class NetworkModel(MLModel):
     def build(self):
         self.is_built = True
         
-    def predict(self, input_values):
+    def predict(self, *input_args):
+        if(len(input_args) != len(self.inputs)):
+            raise ValueError("Network model has "+str(len(self.inputs))+" inputs "
+                             ".Only got {}".format(len(input_args)))
         if(not hasattr(self, '_predictor')):
             self._predictor = self.get_predictor()
-        return self._predictor(input_values)
+        return self._predictor(*input_args)
         
     def get_predictor(self):
         if(len(self.outputs) == 1):

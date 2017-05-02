@@ -63,11 +63,6 @@ class NeuralNetwork(MLModel):
                     raise ValueError("The first layer in a NeuralNetwork "
                                      "model must have an 'input_shape'")
                 input_shape = layer.input_shape
-                if(hasattr(layer, 'input_dtype')):
-                    input_dtype = layer.input_dtype
-                else:
-                    input_dtype = None
-                
                 self.add(InputLayer(input_shape=input_shape))
                 self.add(layer)
                 return
@@ -167,9 +162,17 @@ class NeuralNetwork(MLModel):
         
         self.is_built = True
         
-    def prop_up(self, x):
+    def __call__(self, x=None):
+        if(x is None):
+            x = self.layers[0].get_input_tensors()
         if(not self.is_built):
             self.build()
+        return MLModel.__call__(self, x)
+        
+    def prop_up(self, x=None):
+        if(x is None):
+            raise Exception("No argument passed to NeuralNetwork.prop_up(x). "
+                            "Call NeuralNetwork() instead.")
         return self.model.prop_up(x)
         
     def get_cost(self):
