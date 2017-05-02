@@ -22,7 +22,7 @@ if __name__ == "__main__":
                        go_backwards=True))
     
     
-    concat = Merge()([model(input), model_two(input)])
+    concat = Merge()([forward_rnn(input), backward_rnn(input)])
     output = DenseLayer(10, activation="softmax")(concat)
     
     bi_rnn = NetworkModel(inputs=input, outputs=output)    

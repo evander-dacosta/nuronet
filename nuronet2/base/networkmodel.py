@@ -17,7 +17,8 @@ from mlmodel import MLModel, MLConnection, make_list
 class NetworkModel(MLModel):
     """A container for acyclically connected MLModels
     """
-    def __init__(self, inputs, outputs, name=None):
+    def __init__(self, inputs, outputs, name=None, **kwargs):
+        
         if(not name):
             name = "_" + self.__class__.__name__.lower() + "_"
             name = name + str(N.get_uid(name))
@@ -201,6 +202,8 @@ class NetworkModel(MLModel):
                     input_tensors=self.inputs, output_tensors=self.outputs,
                     input_shapes=[x._nuro_shape for x in self.inputs],
                     output_shapes=[x._nuro_shape for x in self.outputs])
+        
+        self.is_training = True
         self.is_built = True
         
 
@@ -458,11 +461,11 @@ class NetworkModel(MLModel):
         return self._predictor(*input_args)
         
     def get_predictor(self):
-        if(len(self.outputs) == 1):
-            outputs = self.outputs[0]
-        else:
-            outputs = self.outputs
-        return N.function(self.inputs, outputs)
+        training_mode = self.is_training
+        self.set_training(False)
+        function = N.function(self.inputs, self.prop_up(self.inputs))
+        self.set_training(training_mode)
+        return function
         
     def prop_up(self, x):
         x = make_list(x)

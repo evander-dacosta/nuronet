@@ -4,6 +4,7 @@ from layer import Layer, InputLayer, Input
 
 class NeuralNetwork(MLModel):
     def __init__(self, layers=None, name=None, **kwargs):
+        super(NeuralNetwork, self).__init__(**kwargs)
         self.layers = []
         self.model = None #internal model instance
         self.inputs = []
