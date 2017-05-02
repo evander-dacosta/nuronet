@@ -245,6 +245,8 @@ class MLModel(object):
         return self.trainable_weights + self.non_trainable_weights
         
     def __call__(self, x):
+        if(isinstance(x, list)):
+            x = x[:]
         if(not self.is_built):
             input_shapes = []
             for elem in make_list(x):
