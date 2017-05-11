@@ -115,11 +115,12 @@ class Dropout(Layer):
         self.is_built = True
         
     def prop_up(self, x):
-        print "DROPOUT IS TRAINING?", self.is_training
-        return N.switch(self.is_training, N.dropout(x, self.p), x)
+        if(self.is_training):
+            x = N.dropout(x, self.p)
+        return x
         
     def get_cost(self):
-        return 0.
+        return N.cast(0.)
         
     def get_output_shape(self, input_shape):
         return input_shape

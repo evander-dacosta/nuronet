@@ -441,7 +441,7 @@ class TheanoBackend(Backend):
         if(probability < 0 or probability >= 1):
             raise Exception("probability must be in range [0, 1] not {}" \
                             .format(probability))
-        retain = 1. - probability
+        retain = self.cast(1. - probability)
         x *= self.rng_binomial(x.shape, p=retain, dtype=x.dtype)
         x /= retain
         return x

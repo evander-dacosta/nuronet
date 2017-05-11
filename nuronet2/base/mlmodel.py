@@ -438,7 +438,6 @@ class MLModel(object):
             training_updates = self.optimiser.get_updates(self.trainable_weights,
                                              self.total_loss)
             updates = self.get_updates().items() + training_updates
-        
             self.train_function = N.function(inputs, 
                                          [self.total_loss],
                                          updates=updates,

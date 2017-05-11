@@ -25,8 +25,8 @@ if __name__ == "__main__":
                         activation="linear")(input)
     merge = AddMerge()([h1, h2])
     a = Activation('tanh')(merge)
-    #b = Dropout(0.99)(a)
-    y = DenseLayer(3, activation="softmax")(a)
+    b = Dropout(0.1)(a)
+    y = DenseLayer(3, activation="softmax")(b)
     
     
     model = NetworkModel(input, y)
