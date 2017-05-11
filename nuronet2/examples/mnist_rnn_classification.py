@@ -14,7 +14,7 @@ if __name__ == "__main__":
     n_epochs = 30
     model = NeuralNetwork()
     model.add(RNNLayer(64, return_sequences=False, input_shape=(28, 28),
-                       go_backwards=True))
+                       go_backwards=True, w_dropout=0.2))
     model.add(DenseLayer(10, activation="softmax"))
     
     model.compile("adam", "categorical_crossentropy")
