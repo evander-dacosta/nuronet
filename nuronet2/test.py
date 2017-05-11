@@ -98,8 +98,9 @@ class Instruction:
         
         
 class Syllogism:
-    def __init__(self, tokens):
+    def __init__(self, tokens, scramble=False):
         assert(isinstance(tokens, list) and len(tokens) == 3)
+        self.scramble = scramble
         self.tokens = tokens
         self.instructions, all_some_order = self.make_instructions(tokens)
         self.truth = self.get_truth(all_some_order)
@@ -116,7 +117,10 @@ class Syllogism:
         def make_instruction_object(instruction):
             return Instruction(instruction)
         
-        return map(make_instruction_object, instructions), all_some_order
+        instructions = map(make_instruction_object, instructions)
+        if(self.scramble):
+            numpy.random.shuffle(instructions)
+        return instructions, all_some_order
         
     def all_some_templates(self, all_some_order):
         templates = [['all {} are {} ;', 'some {} are {} ;'],
@@ -198,39 +202,61 @@ class Environment:
         
         
 class SyllogismGenerator:
-    def __init__(self, n_datapoints, n_tokens=20):
+    def __init__(self, n_datapoints, n_tokens=20, scramble=False):
+        """
+        scramble shuffles the order of the instructions in a syllogism
+        """
+        self.scramble=scramble
         self.n = n_datapoints
         self.environment = Environment(n_tokens)
         self.syllogisms = self.generate_syllogisms(n_datapoints)
         
     def generate_syllogisms(self, n):
-        return [Syllogism(self.environment.get_unique_tokens(3)) for _ in range(n)]
+        return [Syllogism(self.environment.get_unique_tokens(3), self.scramble) for _ in range(n)]
 
     def __getitem__(self, n):
         return self.syllogisms[n]
         
-    def get_data(self, test_set=0.1):
+    def to_binary(self, syllogisms):
         dataset = []
         truths = []
-        for syllogism in self.syllogisms:
+        if(not isinstance(syllogisms, list)):
+            syllogisms = [syllogisms]
+        for syllogism in syllogisms:
             dataset += [syllogism.to_binary(self.environment)]
             truths += [[syllogism.truth]]
-        dataset = numpy.array(dataset)
-        truths = numpy.array(truths)
+        dataset = numpy.array(dataset).astype(numpy.float32)
+        truths = numpy.array(truths).astype(numpy.float32)
+        return dataset, truths
+        
+        
+    def get_data(self, test_set=0.1, scramble=False):
+        """
+        Scramble randomises the order of the instructions
+        in the syllogism
+        """
+        dataset, truths = self.to_binary(self.syllogisms)
+
         
         n_test = int(self.n * test_set)
         x_test = dataset[-n_test:]
         y_test = truths[-n_test:]
         x = dataset[:-n_test]
-        y = dataset[:-n_test]
+        y = truths[:-n_test]
         return x, y, x_test, y_test
+        
+    def test_model(self, model, scramble=False):
+        syllogism = Syllogism(self.environment.get_unique_tokens(3), scramble)
+        print syllogism, syllogism.truth
+        binary, _ = self.to_binary(syllogism)
+        print "Model prediction is: ", model.predict(binary) > 0.5
 
         
 
 if __name__ == "__main__":
     from nuronet2.base import NeuralNetwork
     from nuronet2.layers import RNNLayer, DenseLayer
-    datagen = SyllogismGenerator(5000)
+    datagen = SyllogismGenerator(5000, scramble=True)
     x, y, x_test, y_test = datagen.get_data()
     
     n_epochs = 30
@@ -241,4 +267,8 @@ if __name__ == "__main__":
     model.compile("adam", "binary_crossentropy")
     model.fit(x, y, n_epochs=n_epochs)
     
+    predictions = model.predict(x_test) > 0.5
+    matches = (predictions == y_test)
+    score = sum(matches)[0] / float(len(matches))
+    print score * 100.
     
