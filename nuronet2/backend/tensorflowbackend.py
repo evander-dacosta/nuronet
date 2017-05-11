@@ -512,11 +512,21 @@ class TensorflowBackend(Backend):
         return tf.greater_equal(a, b)
         
     def switch(self, if_condition, then_expression, else_expression):
-        x_shape = copy.copy(then_expression.get_shape())
-        x = tf.python.control_flow_ops.cond(tf.cast(if_condition, 'bool'),
-                                            lambda: then_expression,
-                                            lambda: else_expression)
-        x.set_shape(x_shape)
+        if(if_condition.dtype != tf.bool):
+            if_condition = tf.cast(if_condition, 'bool')
+        if(not callable(then_expression)):
+            def then_expression_fn():
+                return then_expression
+        else:
+            then_expression_fn = then_expression
+        if(not callable(else_expression)):
+            def else_expression_fn():
+                return else_expression
+        else:
+            else_expression_fn = else_expression
+        x = tf.cond(if_condition, 
+                    then_expression_fn,
+                    else_expression_fn)
         return x
         
     # RANDOM GENERATORS

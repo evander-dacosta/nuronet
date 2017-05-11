@@ -298,6 +298,12 @@ class TheanoBackend(Backend):
         return T.ge(a, b)
         
     def switch(self, if_condition, then_expression, else_expression):
+        if(isinstance(if_condition, bool)):
+            if_condition = 1 if if_condition else 0
+        if callable(then_expression):
+            then_expression = then_expression()
+        if callable(else_expression):
+            else_expression = else_expression()
         return T.switch(if_condition, then_expression, else_expression)
         
     # RANDOM GENERATORS

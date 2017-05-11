@@ -202,6 +202,7 @@ class NetworkModel(MLModel):
                     input_shapes=[x._nuro_shape for x in self.inputs],
                     output_shapes=[x._nuro_shape for x in self.outputs])
         self.is_built = True
+        self.set_training(True)
         
 
         
@@ -220,15 +221,18 @@ class NetworkModel(MLModel):
         tensor_map = {}
         for x, y in zip(self.inputs, inputs):
             tensor_map[str(id(x))] = y
-            
+        
+        
         depth_keys = list(self.connections_by_depth.keys())
         depth_keys.sort(reverse=True)
         for depth in depth_keys:
             connections = self.connections_by_depth[depth]
+
             for connection in connections:
                 layer = connection.outbound_model
                 ref_input_tensors = connection.input_tensors
                 ref_output_tensors = connection.output_tensors
+                
                 
                 #If all previous input tensors are available in
                 #tensor_map, then call connection.inbound_model on them
@@ -238,17 +242,22 @@ class NetworkModel(MLModel):
                         computed_data.append(tensor_map[str(id(x))])
                 if(len(computed_data) == len(ref_input_tensors)):
                     #call layer
+                    
                     if(len(computed_data) == 1):
                         computed_tensor = computed_data[0]
                         output_tensors = make_list(layer.prop_up(computed_tensor))
                         computed_tensors = [computed_tensor]
                     else:
-                        computed_tensors = [x[0] for x in computed_data]
+                        computed_tensors = [x for x in computed_data]
                         output_tensors = make_list(layer.prop_up(computed_tensors))
-                        
+    
                     #Update _shape
                     if(all([hasattr(x, '_nuro_shape') for x in computed_tensors])):
-                        shapes = make_list([layer.get_output_shape(x._nuro_shape) for x in computed_tensors])
+                        if(len(computed_tensors) == 1):
+                            shapes = make_list([layer.get_output_shape(computed_tensors[0]._nuro_shape)])
+                        else:
+                            shapes = make_list([layer.get_output_shape([x._nuro_shape for x in computed_tensors])])
+
                         for x, s in zip(output_tensors, shapes):
                             x._nuro_shape = s
                     
@@ -258,6 +267,7 @@ class NetworkModel(MLModel):
         
         output_tensors = []
         output_shapes = []
+        
         for x in self.outputs:
             assert str(id(x)) in tensor_map, "Could not compute output " + str(x)
             tensor = tensor_map[str(id(x))]
@@ -308,6 +318,7 @@ class NetworkModel(MLModel):
                 [n.set_training(value) for n in layer]
             else:
                 layer.set_training(value)
+        self._predictor = None
         
     def get_weights(self):
         weights = []
@@ -453,16 +464,25 @@ class NetworkModel(MLModel):
         if(len(input_args) != len(self.inputs)):
             raise ValueError("Network model has "+str(len(self.inputs))+" inputs "
                              ".Only got {}".format(len(input_args)))
-        if(not hasattr(self, '_predictor')):
+        if(hasattr(self, '_predictor') and self._predictor is not None):
+            return self._predictor(*input_args)
+        else:
             self._predictor = self.get_predictor()
-        return self._predictor(*input_args)
+            return self._predictor(*input_args)
         
     def get_predictor(self):
-        if(len(self.outputs) == 1):
+        """if(len(self.outputs) == 1):
             outputs = self.outputs[0]
         else:
             outputs = self.outputs
-        return N.function(self.inputs, outputs)
+        return N.function(self.inputs, outputs)"""
+        if(self.is_training):
+            self.set_training(False)
+            function = N.function(self.inputs, self.prop_up(self.inputs))
+            self.set_training(True)
+        else:
+            function = N.function(self.inputs, self.prop_up(self.inputs))
+        return function
         
     def prop_up(self, x):
         x = make_list(x)
@@ -473,6 +493,7 @@ class NetworkModel(MLModel):
             output_tensors, output_shapes = self.run_internal_graph(x)
             return output_tensors
             
+
     def get_updates(self):
         updates = []
         for layer in self.layers:

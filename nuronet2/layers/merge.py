@@ -132,6 +132,9 @@ class _MergeLayer(Layer):
         return N.cast(0.)
         
     def get_output_shape(self, input_shape):
+        if(not isinstance(input_shape, list)):
+            raise Exception("input_shape must be a list of two or more inputs")
+
         if(input_shape[0] is None):
             output_shape = None
         else:

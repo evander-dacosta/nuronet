@@ -27,6 +27,8 @@ class Backend(object):
     for FPGAs
     """
     def __init__(self, rng_seed=None, default_dtype=numpy.float32):
+        if(rng_seed is None):
+            rng_seed = numpy.random.randint(1, 10e6)
         self._default_dtype = default_dtype
         self._rng_seed = rng_seed
         self.rng = self.createRNG(rng_seed)

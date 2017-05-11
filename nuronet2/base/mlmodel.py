@@ -207,7 +207,7 @@ class MLModel(object):
         self.non_trainable_weights = []
         self.is_built = False
         self.train_phase = True
-        self.is_training = False
+        self.is_training = True
         self.trainable = True
         
         valid_kwargs = {'input_shape', 'input_dtype', 'name'}
@@ -612,12 +612,12 @@ class MLModel(object):
             if(enqueuer is not None):
                 enqueuer.stop()
         callbacks.train_end()
+        self.set_training(False)
         return self.history
         
                                 
     def fit_dataset(self, dataset, n_epochs, callbacks=None, verbose=True, 
                      initial_epoch=0):
-        
         self.make_train_function()
         self.make_test_function()
 
@@ -683,6 +683,7 @@ class MLModel(object):
             callbacks.epoch_end(epoch, epoch_logs)
         
         callbacks.train_end()
+        self.set_training(False)
         return self.history
         
         

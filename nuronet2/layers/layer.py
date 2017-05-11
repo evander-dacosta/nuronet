@@ -53,7 +53,8 @@ class DenseLayer(Layer):
         return w_cost + b_cost
             
     def get_output_shape(self, input_shape):
-        assert input_shape and len(input_shape) >= 2
+        assert input_shape and isinstance(input_shape, tuple)
+        assert len(input_shape) >= 2
         assert input_shape[-1]
         if(self.input_dim):
              assert input_shape[-1] == self.input_dim
@@ -83,7 +84,27 @@ class Flatten(Layer):
         
     def get_output_shape(self, input_shape):
         return (input_shape[0], numpy.prod(input_shape[1:]))
+
+
+
+class Activation(Layer):
+    def __init__(self, activation, **kwargs):
+        self.activation = get_activation(activation)
+        Layer.__init__(self, **kwargs)        
         
+    def build(self, input_shape):
+        self.is_built = True
+        
+    def prop_up(self, x):
+        return self.activation(x)
+        
+    def get_cost(self):
+        return N.cast(0.)
+        
+    def get_output_shape(self, input_shape):
+        return input_shape
+
+      
 class Dropout(Layer):
     def __init__(self, p, **kwargs):
         assert 0. < p < 1.
@@ -94,14 +115,11 @@ class Dropout(Layer):
         self.is_built = True
         
     def prop_up(self, x):
-        if(self.is_training):
-            p = self.p
-        else:
-            p = 0.
-        return N.dropout(x, p)
+        print "DROPOUT IS TRAINING?", self.is_training
+        return N.switch(self.is_training, N.dropout(x, self.p), x)
         
     def get_cost(self):
-        return N.cast(0.)
+        return 0.
         
     def get_output_shape(self, input_shape):
         return input_shape
