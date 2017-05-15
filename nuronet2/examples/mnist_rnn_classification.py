@@ -10,7 +10,7 @@ from nuronet2.layers import DenseLayer, RNNLayer
 
 if __name__ == "__main__":
     data = MnistDataset(fName="/home/evander/Dropbox/data/mnist/mnist.pkl.gz",
-                        batch_size=32, flatten=False, limit=5000)
+                        batch_size=32, flatten=False, limit=None)
     n_epochs = 30
     model = NeuralNetwork()
     model.add(RNNLayer(64, return_sequences=False, input_shape=(28, 28),

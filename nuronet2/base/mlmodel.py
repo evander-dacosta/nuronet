@@ -13,7 +13,8 @@ import copy
 from nuronet2.backend import N
 from collections import OrderedDict
 from nuronet2.dataset import DenseDataset
-from nuronet2.objectives import get_objective, BinaryXEntropy, CategoricalXEntropy
+from nuronet2.objectives import get_objective
+from nuronet2.objectives import BinaryXEntropy, CategoricalXEntropy
 from nuronet2.objectives.metrics import binary_accuracy, categorical_accuracy
 
 from nuronet2.optimisers import get_optimiser
