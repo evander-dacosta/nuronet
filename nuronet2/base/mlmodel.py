@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 16 23:54:21 2016
@@ -1041,4 +1042,3 @@ class GeneratorEnqueuer(object):
         self._threads = []
         self._stop_event = None
         self.queue = None
-    

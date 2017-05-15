@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Sat Nov 19 19:58:35 2016
@@ -597,6 +598,3 @@ if __name__ == "__main__":
     net = NetworkModel([a, b], [tensor1, tensor2], 'fred')
     out = net([a, b])
     f = N.function([a, b], out)
-        
-
-    
