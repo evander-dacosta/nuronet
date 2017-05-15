@@ -17,7 +17,7 @@ if __name__ == "__main__":
                        go_backwards=True, w_dropout=0.2))
     model.add(DenseLayer(10, activation="softmax"))
     
-    model.compile("adam", "categorical_crossentropy")
+    model.compile("adam", "categorical_crossentropy", metrics=['accuracy'])
     
     model.fit_dataset(data, n_epochs=n_epochs)
     

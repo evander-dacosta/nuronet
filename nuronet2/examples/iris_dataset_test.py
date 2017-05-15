@@ -19,12 +19,13 @@ if __name__ == "__main__":
     data = IrisDataset(f_name=fName, batch_size=8, validation=0.1)
     
     model = NeuralNetwork()
-    model.add(DenseLayer(100, w_regulariser={'name':'l2', 'l2':1e-4},
+    model.add(DenseLayer(16,
                         activation="tanh2", input_shape=(3,)))
     model.add(DenseLayer(3, activation="softmax"))
     
-    model.compile('rmsprop', "categorical_crossentropy")
-    h = model.fit_generator(data, n_epochs=20, n_workers=1)
+    model.compile('rmsprop', "categorical_crossentropy", metrics=['accuracy'])
+    model.fit_generator(data, steps_per_epoch=17,
+                            n_epochs=20, n_workers=4)
     
     test = numpy.argmax(model.predict(data.x_test), axis=1)
     real = data.y_test.nonzero()[1]
@@ -34,3 +35,6 @@ if __name__ == "__main__":
     g = test - real
     non = g.nonzero()[0]
     print (1. - (len(non) / float(g.shape[0]))) * 100.
+    
+    f = N.function([model.inbound_connections[0].input_tensors[0], model.targets[0]],
+                   model.metrics_tensors[0])

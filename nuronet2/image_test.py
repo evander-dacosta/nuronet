@@ -37,9 +37,9 @@ model.add(nuro.Flatten())
 model.add(nuro.DenseLayer(128, activation='relu'))
 model.add(nuro.DenseLayer(1, activation='sigmoid'))
 
-model.compile('adam', 'binary_crossentropy')
-model.fit_generator2(training_set, steps_per_epoch=250, n_epochs=50, n_workers=10)
-"""model.load_weights("images.network")
+"""model.compile('adam', 'binary_crossentropy')
+model.fit_generator2(training_set, steps_per_epoch=250, n_epochs=50, n_workers=10)"""
+model.load_weights("images.network")
 
 images = test_image_generator.dataset_from_dir(test_dir,
                                                  target_size=(64, 64),
@@ -47,7 +47,7 @@ images = test_image_generator.dataset_from_dir(test_dir,
 x_test, y_test = images.next()
 y_pred = model.predict(x_test) > 0.5
 correct = numpy.sum(y_pred == y_test)
-proportion = correct * 100. / y_test.shape[0]"""
+proportion = correct * 100. / y_test.shape[0]
 
         
 

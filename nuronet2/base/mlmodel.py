@@ -8,11 +8,13 @@ import numpy
 import time
 import threading
 import multiprocessing
+import copy
 
 from nuronet2.backend import N
 from collections import OrderedDict
 from nuronet2.dataset import DenseDataset
-from nuronet2.objectives import get_objective
+from nuronet2.objectives import get_objective, BinaryXEntropy, CategoricalXEntropy
+from nuronet2.objectives.metrics import binary_accuracy, categorical_accuracy
 
 from nuronet2.optimisers import get_optimiser
 import nuronet2.callbacks as cbks
@@ -21,6 +23,40 @@ try:
     import queue
 except ImportError:
     import Queue as queue
+
+
+def _collect_metrics(metrics, output_names):
+    """Maps metric functions to model outputs.
+    # Arguments
+        metrics: a list or dict of metric functions.
+        output_names: a list of the names (strings) of model outputs.
+    # Returns
+        A list (one entry per model output) of lists of metric functions.
+        For instance, if the model has 2 outputs, and for the first output
+        we want to compute "binary_accuracy" and "binary_crossentropy",
+        and just "binary_accuracy" for the second output,
+        the list would look like:
+            `[[binary_accuracy, binary_crossentropy], [binary_accuracy]]`
+    # Raises
+        TypeError: if an incorrect type is passed for the `metrics` argument.
+    """
+    if not metrics:
+        return [[] for _ in output_names]
+    if isinstance(metrics, list):
+        # we then apply all metrics to all outputs.
+        return [copy.copy(metrics) for _ in output_names]
+    elif isinstance(metrics, dict):
+        nested_metrics = []
+        for name in output_names:
+            output_metrics = metrics.get(name, [])
+            if not isinstance(output_metrics, list):
+                output_metrics = [output_metrics]
+            nested_metrics.append(output_metrics)
+        return nested_metrics
+    else:
+        raise TypeError('Type of `metrics` argument not understood. '
+                        'Expected a list or dictionary, found: ' +
+                        str(metrics))
 
 def make_list(x):
     """Normalises a list/tensor into a list
@@ -367,7 +403,7 @@ class MLModel(object):
         params = self.weights
         return [N.get_value(param) for param in params]
         
-    def compile(self, optimiser, loss, **kwargs):
+    def compile(self, optimiser, loss, metrics=[], **kwargs):
         """
         Configures the model for training.
         
@@ -402,6 +438,13 @@ class MLModel(object):
             self.targets.append(N.variable(ndim=len(shape),
                                            dtype=N.dtype(self.outputs[i]),
                                             name='h'+ name + '_target'))
+                                            
+        #prepare metrics
+        self.metrics = metrics
+        self.metrics_names = ['loss']
+        self.metrics_tensors = []
+        
+            
         #compute total loss
         total_loss = None
         for i in range(len(self.outputs)):
@@ -415,6 +458,30 @@ class MLModel(object):
         
         #add regularisation penalties
         total_loss += self.get_cost()
+        
+        # List of same size as output_names
+        output_names = [n.name for n in self.outputs]
+        nested_metrics = _collect_metrics(metrics, output_names)
+        
+        def append_metric(output_num, metric_name, metric_tensor):
+            if(len(output_names) > 1):
+                metric_name = self.outputs[output_num].name + "_" + metric_name
+            self.metrics_names.append(metric_name)
+            self.metrics_tensors.append(metric_tensor)
+            
+        for i in range(len(self.outputs)):
+            y_true = self.targets[i]
+            y_pred = self.outputs[i]
+            output_metrics = nested_metrics[i]
+            for metric in output_metrics:
+                if(metric == 'accuracy' or metric == 'acc'):
+                    output_shape = self.outputs[i]._nuro_shape
+                    acc_fn = None
+                    if(output_shape[-1] == 1 or isinstance(self.loss_functions[i], BinaryXEntropy)):
+                        acc_fn = binary_accuracy
+                    elif(isinstance(self.loss_functions[i], CategoricalXEntropy)):
+                        acc_fn = categorical_accuracy
+                    append_metric(i, 'acc', acc_fn(y_true, y_pred))
         
         #prepare gradient updates and state updates
         self.total_loss = total_loss
@@ -439,7 +506,7 @@ class MLModel(object):
                                              self.total_loss)
             updates = self.get_updates().items() + training_updates
             self.train_function = N.function(inputs, 
-                                         [self.total_loss],
+                                         [self.total_loss] + self.metrics_tensors,
                                          updates=updates,
                                          **self._function_kwargs)
     def make_test_function(self):
@@ -449,8 +516,19 @@ class MLModel(object):
         if(self.test_function is None):
             inputs = self.inputs + self.targets
             self.test_function = N.function(inputs,
-                                            [self.total_loss],
+                                            [self.total_loss] + self.metrics_tensors,
                                             **self._function_kwargs)
+                                            
+    def _get_output_metrics_names(self):
+        out_labels = self.metrics_names
+        deduped_out_labels = []
+        for i, label in enumerate(out_labels):
+            new_label = label
+            if(out_labels.count(label) > 1):
+                dup_idx = out_labels[:i].count(label)
+                new_label += '_' + str(dup_idx + 1)
+            deduped_out_labels.append(new_label)
+        return deduped_out_labels
     
     def fit(self, x, y, batch_size=32, n_epochs=10, verbose=True,
             callbacks=None, validation_split=0.1, test_data=None,
@@ -514,38 +592,39 @@ class MLModel(object):
         batch_sizes = []
         enqueuer = None
         
-        #Try
-        enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
-        enqueuer.start(n_workers=n_workers, max_q_size=max_q_size)
-        
-        while(steps_done < steps):
-            generator_output = None
-            while(enqueuer.is_running()):
-                if(not enqueuer.queue.empty()):
-                    generator_output = enqueuer.queue.get()
-                    break
+        try:
+            enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
+            enqueuer.start(n_workers=n_workers, max_q_size=max_q_size)
+            
+            while(steps_done < steps):
+                generator_output = None
+                while(enqueuer.is_running()):
+                    if(not enqueuer.queue.empty()):
+                        generator_output = enqueuer.queue.get()
+                        break
+                    else:
+                        time.sleep(wait_time)
+                if(not hasattr(generator_output, '__len__')):
+                    raise ValueError('Output of generator must be a tuple (x, y)')
+                
+                x, y = generator_output
+                outs = self.test_function(x, y)
+                
+                if(isinstance(x, list)):
+                    batch_size = len(x[0])
+                elif(isinstance(x, dict)):
+                    batch_size = len(list(x.values())[0])
                 else:
-                    time.sleep(wait_time)
-            if(not hasattr(generator_output, '__len__')):
-                raise ValueError('Output of generator must be a tuple (x, y)')
-            
-            x, y = generator_output
-            outs = self.test_function(x, y)
-            
-            if(isinstance(x, list)):
-                batch_size = len(x[0])
-            elif(isinstance(x, dict)):
-                batch_size = len(list(x.values())[0])
-            else:
-                batch_size = len(x)
-            
-            all_outs.append(outs)
-            steps_done += 1
-            batch_sizes.append(batch_size)
-            
-        #finally:
-            #if enqueuer is not None:
-             #   enqueuer.stop()
+                    batch_size = len(x)
+                
+                all_outs.append(outs)
+                steps_done += 1
+                batch_sizes.append(batch_size)
+                
+        finally:
+            if enqueuer is not None:
+                enqueuer.stop()
+
         if not isinstance(outs, list):
             return numpy.average(numpy.asarray(all_outs),
                               weights=batch_sizes)
@@ -562,7 +641,7 @@ class MLModel(object):
         f = self.test_function
         return f(x, y)
 
-    def fit_generator2(self, generator, 
+    def fit_generator(self, generator, 
                        steps_per_epoch,
                        n_epochs=1, verbose=True,
                        callbacks=None, validation_data=None,
@@ -651,7 +730,9 @@ class MLModel(object):
             'verbose': verbose
         })
         callbacks.train_start()
-        
+
+        #get output labels
+        out_labels = self._get_output_metrics_names()
         if(do_validation and not val_gen):
             if(len(validation_data) == 2):
                 val_x, val_y = validation_data
@@ -672,6 +753,7 @@ class MLModel(object):
             steps_done = 0
             batch_index = 0
             epoch_loss = []
+            train_accuracy = []
             epoch_start_time = time.time()
             while(steps_done < steps_per_epoch):
                 generator_output = None
@@ -707,9 +789,15 @@ class MLModel(object):
                 batch_logs['batch'] = batch_index
                 batch_logs['size'] = batch_size
                 callbacks.batch_start(batch_index, batch_logs)
-                loss = self.train_function(x, y)
-                epoch_loss += loss
-                batch_logs['loss'] = loss[0]
+                outs = self.train_function(x, y)
+                if(not isinstance(outs, list)):
+                    outs = [outs]
+                for l, o in zip(out_labels, outs):
+                    if(l == 'acc'):
+                        train_accuracy.append(numpy.mean(o))
+                    else:
+                        batch_logs[l] = o
+                epoch_loss += [batch_logs['loss']]
                 callbacks.batch_end(batch_index, batch_logs)
                 
                 epoch_logs = {}
@@ -726,10 +814,18 @@ class MLModel(object):
                                                            pickle_safe=pickle_safe)
                     else:
                         val_outs = self.evaluate(val_x, val_y)
-                    epoch_logs['valid_loss'] = val_outs
+                    
+                    if(not isinstance(val_outs, list)):
+                        val_outs = [val_outs]
+                    for l, o in zip(out_labels, val_outs):
+                        epoch_logs['valid_'+l] = o
                 
             epoch_logs['epoch'] = epoch
             epoch_logs['train_loss'] = numpy.mean(epoch_loss)
+            if('acc' in out_labels):
+                epoch_logs['train_acc'] = numpy.mean(train_accuracy)
+                if(do_validation):
+                    epoch_logs['valid_acc'] = numpy.mean(epoch_logs['valid_acc'])
             epoch_logs['epoch_time'] = time.time() - epoch_start_time
             callbacks.epoch_end(epoch, epoch_logs)
             epoch += 1
@@ -740,119 +836,7 @@ class MLModel(object):
         callbacks.train_end()
         self.set_training(False)
         return self.history
-                    
-    def fit_generator(self, generator, n_epochs,
-                      verbose=True, callbacks=None, max_q_size=10,
-                      n_workers=1, pickle_safe=False, initial_epoch=0):
-        """
-        Fits the model on data generated batch-by-batch by a python
-        generator. The generator runs in parallel ith the model.
-        
-        For example, the generator allows us to do data augmentation on the 
-        CPU while the model trains on the GPU
-        
-        Inputs
-        ------
-            @param generator: A generator dataset type
-            @param n_epochs: Total number of epochs
-            @param verbose : Print out per-epoch metrics?
-            @param callbacks: List of callbacks
-            @param max_q_size: Maximum size for the generator queue
-            @param n_workers: Number of processes to spin up when using 
-                             process-based threading
-            @param pickle_safe: If True, use process-based threading
-            @param initial_epoch: Epoch at which to start training
-        Returns
-        -------
-            History instance. This contains all information 
-            collected during training 
-        """
-        wait_time = 0.01 #seconds
-        epoch = initial_epoch
-        self.make_train_function()
-        self.make_test_function()
-        
-        self.history = cbks.History()
-        callbacks = (callbacks or []) + [self.history]
-        if(verbose):
-            callbacks += [cbks.TrainLogger()]
-        callbacks = cbks.CallbackList(callbacks)
-        
-        #make it possible to call callbacks from a different model
-        if(hasattr(self, 'callback_model') and self.callback_model):
-            callback_model = self.callback_model
-        else:
-            callback_model = self
-            
-        callbacks.set_model(callback_model)
-        callbacks.set_params({
-            'batch_size': generator.batch_size,
-            'n_epochs': n_epochs,
-            'verbose': verbose
-        })
-        callbacks.train_start()
-        
-        enqueuer = None
-        
-        try:
-            enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
-            enqueuer.start(max_q_size=max_q_size, n_workers=n_workers)
-            
-            while(epoch < n_epochs):
-                callbacks.epoch_start(epoch)
-                epoch_logs = {}
-                epoch_start_time = time.time()
-                
-                samples_seen = 0
-                batch_index = 0
-                epoch_loss = []
-                
-                #Make the generator generate indices for training and validation
-                generator.make_validation_splits()
-    
-                while(samples_seen < generator.n):
-                    generator_output = None
-                    while enqueuer.is_running():
-                        if not enqueuer.queue.empty():
-                            generator_output = enqueuer.queue.get()
-                            break
-                        else:
-                            time.sleep(wait_time)
-                            
-                    
-                    x, y = generator_output
-                    
-                    #build batch logs
-                    batch_logs = {}
-                    batch_size = x.shape[0]
-                    batch_logs['batch'] = batch_index
-                    batch_logs['size'] = batch_size
-                    callbacks.batch_start(batch_index, batch_logs)
-                    loss = self.train_function(x, y)
-                    epoch_loss += loss
-                    batch_logs['loss'] = loss[0]
-                    callbacks.batch_end(batch_index, batch_logs)
-                    
-                    
-                    batch_index += 1
-                    samples_seen += batch_size
-                #do validation here
-                if(len(generator.valid_indices) > 0):
-                    valid_loss = self.test_function(generator.x_valid,
-                                                    generator.y_valid)
-                    epoch_logs['valid_loss'] = valid_loss[0]
-                epoch_logs['epoch'] = epoch
-                epoch_logs['train_loss'] = numpy.mean(epoch_loss)
-                epoch_logs['epoch_time'] = time.time() - epoch_start_time
-                callbacks.epoch_end(epoch, epoch_logs)
-                epoch += 1
-        finally:
-            if(enqueuer is not None):
-                enqueuer.stop()
-        callbacks.train_end()
-        self.set_training(False)
-        return self.history
-        
+
                                 
     def fit_dataset(self, dataset, n_epochs, callbacks=None, verbose=True, 
                      initial_epoch=0):
@@ -880,6 +864,13 @@ class MLModel(object):
         })
         callbacks.train_start()
         
+        if(dataset.validation and 0. < dataset.validation < 1.):
+            do_validation = True
+        else:
+            do_validation = False
+        #get output labels
+        out_labels = self._get_output_metrics_names()
+        
         for epoch in range(initial_epoch, n_epochs):
             callbacks.epoch_start(epoch)
             epoch_start_time = time.time()
@@ -888,12 +879,11 @@ class MLModel(object):
             #Make the generator generate indices for training and validation
             dataset.make_validation_splits()
             
-            
             #iterate over batches
             batch_index = 0
             epoch_loss = []
-            valid_loss = 0
             samples_seen = 0
+            train_accuracy = []
             while(samples_seen < dataset.n):
                 batch_index += 1
                 batch_logs = {}
@@ -902,21 +892,38 @@ class MLModel(object):
                 
                 callbacks.batch_start(batch_index, batch_logs)
                 x_b, y_b = dataset.next()
-                loss = self.train_function(x_b, y_b)
-                epoch_loss += loss
-                batch_logs['loss'] = loss[0]
-                epoch_loss += loss
+                
+                outs = self.train_function(x_b, y_b)
+                if(not isinstance(outs, list)):
+                    outs = [outs]
+                for l, o in zip(out_labels, outs):
+                    if(l == 'acc'):
+                        train_accuracy.append(numpy.mean(o))
+                    else:
+                        batch_logs[l] = o
+                epoch_loss += [batch_logs['loss']]
                 callbacks.batch_end(batch_index, batch_logs)
                 
                 #increment counters
                 batch_index += 1
                 samples_seen += x_b.shape[0]
-
-            valid_loss = self.test_function(dataset.x_valid, 
-                                            dataset.y_valid)
+                
+            if(do_validation):
+                val_outs = self.test_function(dataset.x_valid, 
+                                                dataset.y_valid)
+                if(not isinstance(val_outs, list)):
+                    val_outs = [val_outs]
+                    
+                for l, o in zip(out_labels, val_outs):
+                    epoch_logs['valid_'+l] = o
+            
+            
             epoch_logs['epoch'] = epoch
             epoch_logs['train_loss'] = numpy.mean(epoch_loss)
-            epoch_logs['valid_loss'] = valid_loss[0]
+            if('acc' in out_labels):
+                epoch_logs['train_acc'] = numpy.mean(train_accuracy)
+                if(do_validation):
+                    epoch_logs['valid_acc'] = numpy.mean(epoch_logs['valid_acc'])
             epoch_logs['epoch_time'] = time.time() - epoch_start_time
             callbacks.epoch_end(epoch, epoch_logs)
         

@@ -155,6 +155,10 @@ class TrainLogger(Callback):
         ])
         if('valid_loss' in logs.keys()):
             info_tabulate['valid_loss'] = "{:.5f}".format(float(logs['valid_loss']))
+        if('train_acc' in logs.keys()):
+            info_tabulate['train_acc']="{:.2f}".format(float(logs['train_acc']))
+        if('valid_acc' in logs.keys()):
+            info_tabulate['valid_acc']="{:.2f}".format(float(logs['valid_acc']))
         info_tabulate['epoch_time'] = "{:.2f} s".format(logs['epoch_time'])         
         tab = tabulate([info_tabulate], headers="keys", floatfmt='.5f')
         out = ""
@@ -187,12 +191,29 @@ class History(Callback):
             self.history.setdefault(k, []).append(v)
 
     
-    def plot(self):
+    def plot(self, metric='loss'):
+        """
+        Can plot loss / acc
+        loss = loss
+        acc = accuracy
+        """
         import matplotlib.pyplot as plt
         import seaborn as sns
+        if(metric.startswith('acc') or metric.startswith('err')):
+            metric = metric[:3]
+        if(metric not in ['acc', 'loss', 'err']):
+            raise ValueError("Argument to History.plot() must be one of "
+                             "'loss',  'acc' or 'err'. Given", metric)
+        if(metric in ['acc', 'loss']):
+            train_data = self.history['train_'+metric]
+            valid_data = self.history['valid_'+metric]
+        else:
+            train_data = 1. - numpy.array(self.history['train_acc'])
+            valid_data = 1. - numpy.array(self.history['valid_acc'])
+        
         plt.figure()
-        plt.plot(self.epoch, self.history['train_loss'], label='train_loss')
-        plt.plot(self.epoch, self.history['valid_loss'], label='valid_loss')
+        plt.plot(self.epoch, train_data, label='train_'+metric)
+        plt.plot(self.epoch, valid_data, label='valid_'+metric)
         plt.legend()
         plt.show()
         

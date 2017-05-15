@@ -23,7 +23,7 @@ if __name__ == "__main__":
                         activation="tanh2",  input_shape=(3,)))
     model.add(DenseLayer(3, activation="softmax"))
     model.compile('adam', "categorical_crossentropy")
-    h = model.fit(X, Y, batch_size=8, n_epochs=20)
+    h = model.fit(X, Y, batch_size=8, n_epochs=20, validation=0.)
     
     test = numpy.argmax(model.predict(XTest), axis=1)
     real = YTest.nonzero()[1]
