@@ -14,8 +14,8 @@ from nuronet2.backend import N
 from nuronet2.base import MLModel, NetworkModel, NeuralNetwork
 
 if __name__ == "__main__":
-    fName = "/home/evander/Dropbox/data/iris/iris.data"
-    #fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
+    #fName = "/home/evander/Dropbox/data/iris/iris.data"
+    fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
     X, Y, XTest, YTest = Iris.readFile(fName, dtype=N.default_dtype)
     
     model = NeuralNetwork()

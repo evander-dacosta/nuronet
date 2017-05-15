@@ -185,6 +185,7 @@ class History(Callback):
         self.epoch.append(epoch)
         for k, v in logs.items():
             self.history.setdefault(k, []).append(v)
+
     
     def plot(self):
         import matplotlib.pyplot as plt
@@ -194,3 +195,10 @@ class History(Callback):
         plt.plot(self.epoch, self.history['valid_loss'], label='valid_loss')
         plt.legend()
         plt.show()
+        
+    def get_validation_scores(self):
+        """
+        Return a list of the loss scores on the validation set
+        so we can evaluate bias and variance
+        """
+        return numpy.array(self.history['valid_loss'])

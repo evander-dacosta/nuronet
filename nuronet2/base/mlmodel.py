@@ -672,7 +672,7 @@ class MLModel(object):
                 #increment counters
                 batch_index += 1
                 samples_seen += x_b.shape[0]
-                
+
             valid_loss = self.test_function(dataset.x_valid, 
                                             dataset.y_valid)
             epoch_logs['epoch'] = epoch

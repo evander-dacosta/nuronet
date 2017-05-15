@@ -7,3 +7,4 @@ from nuronet2.dataset import *
 from nuronet2.layers import *
 from nuronet2.objectives import *
 from nuronet2.optimisers import *
+from nuronet2.preprocessing import *
