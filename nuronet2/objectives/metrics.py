@@ -7,7 +7,7 @@ Created on Mon May 15 22:30:17 2017
 from nuronet2.backend import N
 
 def binary_accuracy(y_true, y_pred):
-    return N.mean(N.equal(y_true, N.round(y_pred)))
+    return N.mean(N.equal(y_true, N.round(y_pred)), axis=-1)
 
 
 def categorical_accuracy(y_true, y_pred):
