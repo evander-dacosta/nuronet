@@ -14,16 +14,16 @@ from nuronet2.backend import N
 from nuronet2.base import MLModel, NetworkModel, NeuralNetwork
 
 if __name__ == "__main__":
-    #fName = "/home/evander/Dropbox/data/iris/iris.data"
-    fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
+    fName = "/home/evander/Dropbox/data/iris/iris.data"
+    #fName = "C:\\Users\\Evander\\Dropbox\\data\\iris\\iris.data"
     X, Y, XTest, YTest = Iris.readFile(fName, dtype=N.default_dtype)
     
     model = NeuralNetwork()
     model.add(DenseLayer(100, w_regulariser={'name':'l2', 'l2':1e-4},
                         activation="tanh2",  input_shape=(3,)))
     model.add(DenseLayer(3, activation="softmax"))
-    model.compile('adam', "categorical_crossentropy")
-    h = model.fit(X, Y, batch_size=8, n_epochs=20, validation=0.)
+    model.compile('adam', "categorical_crossentropy", metrics=['acc'])
+    h = model.fit(X, Y, batch_size=8, n_epochs=20)
     
     test = numpy.argmax(model.predict(XTest), axis=1)
     real = YTest.nonzero()[1]
