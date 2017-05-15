@@ -1,4 +1,3 @@
-
 from nuronet2.base import MLModel, NetworkModel, MLConnection, get_source_inputs
 from layer import Layer, InputLayer, Input
 
@@ -239,9 +238,3 @@ class NeuralNetwork(MLModel):
         if(not self.is_built):
             self.build()
         return self.model.get_predictor()
-        
-
-        
-    
-        
-        

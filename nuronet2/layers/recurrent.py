@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Fri Feb 24 23:20:04 2017
@@ -448,4 +449,3 @@ class GRULayer(Recurrent):
         return h, [h]
 if __name__ == "__main__":
     r = Recurrent(input_dim=3)
-    
