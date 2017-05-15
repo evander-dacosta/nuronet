@@ -1,3 +1,4 @@
+
 from nuronet2.optimisers import *
 from nuronet2.dataset.mnist import *
 from nuronet2.backend import N
@@ -24,4 +25,3 @@ if __name__ == "__main__":
     y_ = model.predict(data.x_test)
     assess = (numpy.argmax(y_, axis=1) == numpy.argmax(data.y_test, axis=1))
     print "Accuracy = {}".format(numpy.sum(assess) / float(assess.shape[0]))
-    
