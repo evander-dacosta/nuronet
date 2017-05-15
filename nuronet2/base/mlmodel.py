@@ -501,7 +501,246 @@ class MLModel(object):
         return self.fit_dataset(dataset=dataset, n_epochs=n_epochs, 
                                 callbacks=callbacks,
                                 verbose=verbose, initial_epoch=initial_epoch)
+                              
+          
+
+    def evaluate_generator(self, generator, steps,
+                           max_q_size=10, n_workers=1, pickle_safe=False):
+        self.make_test_function()
+        
+        steps_done = 0
+        wait_time = 0.01
+        all_outs = []
+        batch_sizes = []
+        enqueuer = None
+        
+        #Try
+        enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
+        enqueuer.start(n_workers=n_workers, max_q_size=max_q_size)
+        
+        while(steps_done < steps):
+            generator_output = None
+            while(enqueuer.is_running()):
+                if(not enqueuer.queue.empty()):
+                    generator_output = enqueuer.queue.get()
+                    break
+                else:
+                    time.sleep(wait_time)
+            if(not hasattr(generator_output, '__len__')):
+                raise ValueError('Output of generator must be a tuple (x, y)')
+            
+            x, y = generator_output
+            outs = self.test_function(x, y)
+            
+            if(isinstance(x, list)):
+                batch_size = len(x[0])
+            elif(isinstance(x, dict)):
+                batch_size = len(list(x.values())[0])
+            else:
+                batch_size = len(x)
+            
+            all_outs.append(outs)
+            steps_done += 1
+            batch_sizes.append(batch_size)
+            
+        #finally:
+            #if enqueuer is not None:
+             #   enqueuer.stop()
+        if not isinstance(outs, list):
+            return numpy.average(numpy.asarray(all_outs),
+                              weights=batch_sizes)
+        else:
+            averages = []
+            for i in range(len(outs)):
+                averages.append(numpy.average([out[i] for out in all_outs],
+                                           weights=batch_sizes))
+            return averages
+            
+
+    def evaluate(self, x, y):
+        self.make_test_function()
+        f = self.test_function
+        return f(x, y)
+
+    def fit_generator2(self, generator, 
+                       steps_per_epoch,
+                       n_epochs=1, verbose=True,
+                       callbacks=None, validation_data=None,
+                       validation_steps=None,
+                       max_q_size=10,
+                       n_workers=1,
+                       pickle_safe=False,
+                       initial_epoch=0):
+        """
+        Fits the model on data yielded batch-by-batch by a 
+        python generator. The generator runs parallel to the model.
+        For example, the generator can do real-time data augmentation
+        while the model fits
+        
+        # Arguments
+            generator: A dataset/generator. Must yield (batch_x, batch_y)
+                        when called.
+                        
+            steps_per_epoch: Total number of steps (batches of samples)
+                             to yield from 'generator' per epoch. Should
+                             Typically be equal to the number of unique samples
+                             divided by the batch_size.
+            
+            n_epochs: Total number of epochs to run for
+            
+            verbose: verbosity mode
+            
+            callbacks: List of callbacks to be called during training
+            
+            validation_data: This can be either:
+                             - A generator 
+                             - A tuple (inputs, targets)
+            
+            validation_steps: Only relevant if validation_data is a generator
+                             Total number of steps to yield from the generator
+                             before stopping
+                             
+            max_q_size: maximum size for the generator queue
+            
+            workers: maximum number of processes to spin up
+                    when using process based threading
+            
+            pickle_safe: if True, use process based threading.
+                        Note that because
+                        this implementation relies on multiprocessing,
+                        you should not pass
+                        non picklable arguments to the generator
+                        as they can't be passed
+                        easily to children processes.
+            
+            initial_epoch: epoch at which to start training
+                    (useful for resuming a previous training run)
+            """
+            
+        wait_time = 0.01
+        epoch = initial_epoch
+        do_validation = bool(validation_data)
+        
+        self.make_train_function()
+        if(do_validation):
+            self.make_test_function()
+            
+        val_gen = (hasattr(validation_data, 'next') or
+                   hasattr(validation_data, '__next__'))
+        if val_gen and not validation_steps:
+            raise ValueError('When using a generator for validation data, '
+                             'you must specify a value for '
+                             '`validation_steps`.')
+            
+        self.history = cbks.History()
+        callbacks = (callbacks or []) + [self.history]
+        if(verbose):
+            callbacks += [cbks.TrainLogger()]
+        callbacks = cbks.CallbackList(callbacks) 
+        
+        #make it possible to call callbacks from a different model
+        if(hasattr(self, 'callback_model') and self.callback_model):
+            callback_model = self.callback_model
+        else:
+            callback_model = self
+            
+        callbacks.set_model(callback_model)
+        callbacks.set_params({
+            'batch_size': generator.batch_size,
+            'n_epochs': n_epochs,
+            'verbose': verbose
+        })
+        callbacks.train_start()
+        
+        if(do_validation and not val_gen):
+            if(len(validation_data) == 2):
+                val_x, val_y = validation_data
+            else:
+                raise ValueError('validation_data should be a tuple '
+                                 '`(val_x, val_y, val_sample_weight)` '
+                                 'or `(val_x, val_y)`. Found: ' +
+                                 str(validation_data))
+        
+        enqueuer = None
+        
+        #try: 
+        enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
+        enqueuer.start(max_q_size=max_q_size, n_workers=n_workers)
+        
+        while epoch < n_epochs:
+            callbacks.epoch_start(epoch)
+            steps_done = 0
+            batch_index = 0
+            epoch_loss = []
+            epoch_start_time = time.time()
+            while(steps_done < steps_per_epoch):
+                generator_output = None
+                while(enqueuer.is_running()):
+                    if(not enqueuer.queue.empty()):
+                        generator_output = enqueuer.queue.get()
+                        break
+                    else:
+                        time.sleep(wait_time)
+                        
+                if not hasattr(generator_output, '__len__'):
+                    raise ValueError('output of generator should be '
+                                         'a tuple `(x, y, sample_weight)` '
+                                         'or `(x, y)`. Found: ' +
+                                         str(generator_output))
                                 
+                if(len(generator_output) == 2):
+                    x, y = generator_output
+                else:
+                    raise ValueError('output of generator should be '
+                                         'a tuple `(x, y, sample_weight)` '
+                                         'or `(x, y)`. Found: ' +
+                                         str(generator_output))
+                
+                # build batch logs
+                batch_logs = {}
+                if(isinstance(x, list)):
+                    batch_size = x[0].shape[0]
+                elif(isinstance(x, dict)):
+                    batch_size = list(x.values())[0].shape[0]
+                else:
+                    batch_size = x.shape[0]
+                batch_logs['batch'] = batch_index
+                batch_logs['size'] = batch_size
+                callbacks.batch_start(batch_index, batch_logs)
+                loss = self.train_function(x, y)
+                epoch_loss += loss
+                batch_logs['loss'] = loss[0]
+                callbacks.batch_end(batch_index, batch_logs)
+                
+                epoch_logs = {}
+                batch_index += 1
+                steps_done += 1
+                
+                # Epoch finished
+                if(steps_done >= steps_per_epoch and do_validation):
+                    if(val_gen):
+                        val_outs = self.evaluate_generator(validation_data,
+                                                           validation_steps,
+                                                           max_q_size=max_q_size,
+                                                           n_workers=n_workers,
+                                                           pickle_safe=pickle_safe)
+                    else:
+                        val_outs = self.evaluate(val_x, val_y)
+                    epoch_logs['valid_loss'] = val_outs
+                
+            epoch_logs['epoch'] = epoch
+            epoch_logs['train_loss'] = numpy.mean(epoch_loss)
+            epoch_logs['epoch_time'] = time.time() - epoch_start_time
+            callbacks.epoch_end(epoch, epoch_logs)
+            epoch += 1
+
+        #finally:
+         #   if enqueuer is not None:
+          #      enqueuer.stop()
+        callbacks.train_end()
+        self.set_training(False)
+        return self.history
+                    
     def fit_generator(self, generator, n_epochs,
                       verbose=True, callbacks=None, max_q_size=10,
                       n_workers=1, pickle_safe=False, initial_epoch=0):

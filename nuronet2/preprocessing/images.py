@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Mon May 15 14:58:58 2017
 
@@ -15,6 +14,7 @@ from sklearn.cross_validation import KFold
 from nuronet2.dataset import IndexIterator
 from nuronet2.backend import N
 
+import matplotlib.pyplot as plt
 try:
     from PIL import Image as pil_image
 except ImportError:
@@ -224,6 +224,11 @@ def img_to_array(img):
     else:
         raise ValueError('Unsupported image shape: ', x.shape)
     return x
+    
+def plot_img(img):
+    if(len(img.shape) == 3):
+        img = img.transpose(1, 2, 0)
+    plt.imshow(img)
 
 
 def load_img(path, grayscale=False, target_size=None):
@@ -687,15 +692,15 @@ class DirectoryIterator(IndexIterator):
                            grayscale=grayscale,
                            target_size=self.target_size)
             x = img_to_array(img)
-            #x = self.image_data_generator.random_transform(x)
-            #x = self.image_data_generator.standardize(x)
+            x = self.image_data_generator.random_transform(x)
+            x = self.image_data_generator.standardise(x)
             batch_x[i] = x
             
         if(self.class_mode == None or self.class_mode == "None"):
             batch_y = batch_x.copy()
         elif(self.class_mode == 'binary'):
             batch_y = self.classes[index_array].astype(N.floatx)
-            batch_y = batch_y.reshape((1, batch_y.shape[0]))
+            batch_y = batch_y.reshape((batch_y.shape[0], 1))
         elif(self.class_mode == 'categorical'):
             batch_y = numpy.zeros((len(batch_x), self.num_class), dtype=N.floatx)
             for i, label in enumerate(self.classes[index_array]):
@@ -705,8 +710,24 @@ class DirectoryIterator(IndexIterator):
         return batch_x, batch_y
 
 if __name__ == "__main__":
-    #directory = "/home/evander/Dropbox/data/animals/"
+    #directory = "/home/evander/Dropbox/data/animals/training_set"
     directory = "C:\\Users\\Evander\\Dropbox\\data\\animals\\training_set"
-    iterator = DirectoryIterator(directory, None)
-    iterator.make_validation_splits()
+    train_image_generator = ImageDataGenerator(rescale=1./255,
+                                          shear_range=0.2,
+                                          zoom_range=0.2,
+                                          horizontal_flip=True)
+    training_set = train_image_generator.dataset_from_dir(directory,
+                                                     target_size=(64, 64),
+                                                     batch_size=32, class_mode='binary')
     
+    import time 
+    def time_it():
+        start_time = time.time()
+        sho = 0
+        for i in range(250):
+            print sho
+            x, y = training_set.next()
+            sho += x.shape[0]
+        end_time = time.time() - start_time
+        return end_time
+    print time_it()
