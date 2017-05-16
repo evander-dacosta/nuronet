@@ -156,9 +156,9 @@ class TrainLogger(Callback):
         if('valid_loss' in logs.keys()):
             info_tabulate['valid_loss'] = "{:.5f}".format(float(logs['valid_loss']))
         if('train_acc' in logs.keys()):
-            info_tabulate['train_acc']="{:.2f}".format(float(logs['train_acc']))
+            info_tabulate['train_acc']="{:.5f}".format(float(logs['train_acc']))
         if('valid_acc' in logs.keys()):
-            info_tabulate['valid_acc']="{:.2f}".format(float(logs['valid_acc']))
+            info_tabulate['valid_acc']="{:.5f}".format(float(logs['valid_acc']))
         info_tabulate['epoch_time'] = "{:.2f} s".format(logs['epoch_time'])         
         tab = tabulate([info_tabulate], headers="keys", floatfmt='.5f')
         out = ""

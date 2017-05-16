@@ -652,32 +652,6 @@ class DirectoryIterator(IndexIterator):
                         self.filenames.append(os.path.relpath(absolute_path, directory))
         super(DirectoryIterator, self).__init__(self.samples, batch_size, shuffle)
 
-        self.valid_indices = []        
-        #number of validation samples
-        if(validation is not None and validation > 0.):
-            self.validation = validation
-            self.valid_iterator = self.make_validation_iterator(self.samples)
-
-    @property
-    def x_valid(self):
-        return self.x[self.valid_indices]
-        
-    @property
-    def y_valid(self):
-        return self.y[self.valid_indices]
-
-    def make_validation_iterator(self, n):
-        n_folds = round(1. / self.validation)
-        kfold = KFold(n, n_folds)
-        return itertools.cycle(kfold)
-
-    def make_validation_splits(self):
-        if(not hasattr(self, 'validation')):
-            return
-        _, valid_indices = next(self.valid_iterator)
-        self.valid_indices = valid_indices
-        self.reset()
-            
 
     def next(self):
         with self.lock:

@@ -25,7 +25,8 @@ if __name__ == "__main__":
     
     model.compile('rmsprop', "categorical_crossentropy", metrics=['accuracy'])
     model.fit_generator(data, steps_per_epoch=17,
-                            n_epochs=20, n_workers=4)
+                            n_epochs=20, n_workers=4, validation_data=data,
+                            validation_steps=5)
     
     test = numpy.argmax(model.predict(data.x_test), axis=1)
     real = data.y_test.nonzero()[1]

@@ -183,6 +183,11 @@ class TensorflowBackend(Backend):
         x._nuro_history = None
         return x
         
+    def constant(self, value, dtype=None, shape=None, name=None):
+        if(dtype is None):
+            dtype = self.floatx
+        return tf.constant(value, dtype=dtype, shape=shape, name=name)
+        
     def scalar(self, dtype=None, name=None):
         return self.variable(ndim=0, dtype=dtype, name=name)
         
@@ -530,20 +535,32 @@ class TensorflowBackend(Backend):
         return x
         
     # RANDOM GENERATORS
-    def rng_normal(self, shape, mean=0., std=1, dtype=None):
+    def rng_normal(self, shape, mean=0., std=1, dtype=None, seed=None):
+        if(seed is None):
+            seed = numpy.random.randint(1e7)
         dtype = _str_dtype(dtype)
         return tf.random_normal(shape, mean=mean, stddev=std,
-                                dtype=dtype, seed=self._rng_seed)
+                                dtype=dtype, seed=seed)
         
-    def rng_uniform(self, shape, low=0., high=1., dtype=None):
+    def rng_truncated_normal(self, shape, mean=0., std=1., dtype=None, seed=None):
+        if(seed is None):
+            seed = numpy.random.randint(1e7)
+        dtype = _str_dtype(dtype)
+        return tf.truncated_normal(shape, mean, std, dtype=dtype, seed=seed)
+        
+    def rng_uniform(self, shape, low=0., high=1., dtype=None, seed=None):
+        if(seed is None):
+            seed = numpy.random.randint(1e7)
         dtype = _str_dtype(dtype)
         return tf.random_uniform(shape, minval=low, maxval=high,
-                                 dtype=dtype, seed=self._rng_seed)
+                                 dtype=dtype, seed=seed)
         
-    def rng_binomial(self, shape, p=0., dtype=None):
+    def rng_binomial(self, shape, p=0., dtype=None, seed=None):
+        if(seed is None):
+            seed = numpy.random.randint(1e7)
         dtype = _str_dtype(dtype)
         return tf.select(tf.random_uniform(shape=shape, dtype=dtype, 
-                                    seed=self._rng_seed) <= p,
+                                    seed=seed) <= p,
                                     tf.ones(shape, dtype=dtype),
                                     tf.zeros(shape, dtype=dtype))
                                     

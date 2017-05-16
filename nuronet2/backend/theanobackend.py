@@ -38,7 +38,17 @@ class TheanoBackend(Backend):
         ret._nuro_shape = tuple([None for _ in range(ndim)])
         ret._nuro_history = None
         return ret
-        
+
+    def constant(self, value, dtype=None, shape=None, name=None):
+        if(dtype is None):
+            dtype = self.floatx
+        if(shape is None):
+            shape = ()
+        np_value = value * numpy.ones(shape)
+        const = T.constant(np_value, dtype=dtype, name=name)
+        const._nuro_shape = shape
+        return const
+
     def scalar(self, dtype=None, name=None):
         return self.variable(ndim=0, dtype=dtype, name=name)
         
@@ -307,20 +317,29 @@ class TheanoBackend(Backend):
         return T.switch(if_condition, then_expression, else_expression)
         
     # RANDOM GENERATORS
-    def rng_normal(self, shape, mean=0., std=1, dtype=None):
+    def rng_normal(self, shape, mean=0., std=1, dtype=None, seed=None):
         if(dtype is None):
             dtype = self._default_dtype
-        return self.rng.normal(size=shape, avg=mean, std=std, dtype=dtype)
+        return self.createRNG(seed=seed).normal(size=shape, avg=mean, 
+                                                std=std, dtype=dtype)
         
-    def rng_uniform(self, shape, low=0., high=1., dtype=None):
+    def rng_uniform(self, shape, low=0., high=1., dtype=None, seed=None):
         if(dtype is None):
             dtype = self._default_dtype
-        return self.rng.uniform(shape, low=low, high=high, dtype=dtype)
+        return self.createRNG(seed=seed).uniform(shape, low=low, high=high,
+                                                    dtype=dtype)
         
-    def rng_binomial(self, shape, p=0., dtype=None):
+    def rng_binomial(self, shape, p=0., dtype=None, seed=None):
         if(dtype is None):
             dtype = self._default_dtype
-        return self.rng.binomial(shape, p=p, dtype=dtype)
+        return self.createRNG(seed=seed).binomial(shape, p=p, dtype=dtype)
+        
+    def rng_truncated_normal(self, shape, mean=0., std=1., dtype=None, seed=None):
+        if(dtype is None):
+            dtype = self._default_dtype
+        rng = self.createRNG(seed=seed)
+        normal_tensor = rng.normal(size=shape, avg=mean, std=std, dtype=dtype)
+        return self.clip(normal_tensor, mean - 2*std, mean + 2 * std)
         
         
     #NEURAL NETWORK OPS

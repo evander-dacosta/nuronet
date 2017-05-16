@@ -10,6 +10,7 @@ import time
 import threading
 import multiprocessing
 import copy
+import warnings
 
 from nuronet2.backend import N
 from collections import OrderedDict
@@ -590,52 +591,54 @@ class MLModel(object):
         
         steps_done = 0
         wait_time = 0.01
-        all_outs = []
-        batch_sizes = []
         enqueuer = None
-        
-        try:
-            enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
-            enqueuer.start(n_workers=n_workers, max_q_size=max_q_size)
-            
-            while(steps_done < steps):
-                generator_output = None
-                while(enqueuer.is_running()):
-                    if(not enqueuer.queue.empty()):
-                        generator_output = enqueuer.queue.get()
-                        break
-                    else:
-                        time.sleep(wait_time)
-                if(not hasattr(generator_output, '__len__')):
-                    raise ValueError('Output of generator must be a tuple (x, y)')
-                
-                x, y = generator_output
-                outs = self.test_function(x, y)
-                
-                if(isinstance(x, list)):
-                    batch_size = len(x[0])
-                elif(isinstance(x, dict)):
-                    batch_size = len(list(x.values())[0])
-                else:
-                    batch_size = len(x)
-                
-                all_outs.append(outs)
-                steps_done += 1
-                batch_sizes.append(batch_size)
-                
-        finally:
-            if enqueuer is not None:
-                enqueuer.stop()
+        out_labels = self.metrics_names
+        batch_sizes = []
+        ret = []
 
-        if not isinstance(outs, list):
-            return numpy.average(numpy.asarray(all_outs),
-                              weights=batch_sizes)
-        else:
-            averages = []
-            for i in range(len(outs)):
-                averages.append(numpy.average([out[i] for out in all_outs],
-                                           weights=batch_sizes))
-            return averages
+        enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
+        enqueuer.start(n_workers=n_workers, max_q_size=max_q_size)
+        
+        while(steps_done < steps):
+            generator_output = None
+            while(enqueuer.is_running()):
+                if(not enqueuer.queue.empty()):
+                    generator_output = enqueuer.queue.get()
+                    break
+                else:
+                    time.sleep(wait_time)
+            if(not hasattr(generator_output, '__len__')):
+                raise ValueError('Output of generator must be a tuple (x, y)')
+            
+            x, y = generator_output
+            outs = self.test_function(x, y)
+            new_outs = []
+            if not isinstance(outs, list):
+                outs = [outs]
+            for l, o in zip(out_labels, outs):
+                if(l == 'acc'):
+                    o = numpy.mean(o)
+                new_outs.append(o)
+            ret.append(new_outs)
+
+            if(isinstance(x, list)):
+                batch_size = len(x[0])
+            elif(isinstance(x, dict)):
+                batch_size = len(list(x.values())[0])
+            else:
+                batch_size = len(x)
+            
+            steps_done += 1
+            batch_sizes.append(batch_size)
+                
+
+        if enqueuer is not None:
+            enqueuer.stop()
+                
+        array = []
+        for i in range(len(out_labels)):
+            array.append(numpy.average([out[i] for out in ret], weights=batch_sizes))
+        return array
             
 
     def evaluate(self, x, y):
@@ -740,13 +743,11 @@ class MLModel(object):
                 val_x, val_y = validation_data
             else:
                 raise ValueError('validation_data should be a tuple '
-                                 '`(val_x, val_y, val_sample_weight)` '
-                                 'or `(val_x, val_y)`. Found: ' +
+                                 '(val_x, val_y). Found: ' +
                                  str(validation_data))
-        
+
         enqueuer = None
         
-        #try: 
         enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
         enqueuer.start(max_q_size=max_q_size, n_workers=n_workers)
         
@@ -814,8 +815,10 @@ class MLModel(object):
                                                            max_q_size=max_q_size,
                                                            n_workers=n_workers,
                                                            pickle_safe=pickle_safe)
+                        
                     else:
                         val_outs = self.evaluate(val_x, val_y)
+                        print val_outs
                     
                     if(not isinstance(val_outs, list)):
                         val_outs = [val_outs]
@@ -831,10 +834,9 @@ class MLModel(object):
             epoch_logs['epoch_time'] = time.time() - epoch_start_time
             callbacks.epoch_end(epoch, epoch_logs)
             epoch += 1
-
-        #finally:
-         #   if enqueuer is not None:
-          #      enqueuer.stop()
+        
+        if enqueuer is not None:
+            enqueuer.stop()
         callbacks.train_end()
         self.set_training(False)
         return self.history
@@ -996,6 +998,7 @@ class GeneratorEnqueuer(object):
                     else:
                         time.sleep(wait_time)
                 except Exception:
+                    print "Error thrown 1"
                     self._stop_event.set()
                     raise
         try:
@@ -1016,6 +1019,7 @@ class GeneratorEnqueuer(object):
                 self._threads.append(thread)
                 thread.start()
         except:
+            print "Error Thrown 2"
             self.stop()
             raise
             
