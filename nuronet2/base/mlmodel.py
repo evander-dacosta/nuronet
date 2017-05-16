@@ -591,11 +591,10 @@ class MLModel(object):
         
         steps_done = 0
         wait_time = 0.01
-        enqueuer = None
-        out_labels = self.metrics_names
+        all_outs = []
         batch_sizes = []
-        ret = []
-
+        enqueuer = None
+        
         enqueuer = GeneratorEnqueuer(generator, pickle_safe=pickle_safe)
         enqueuer.start(n_workers=n_workers, max_q_size=max_q_size)
         
@@ -607,38 +606,43 @@ class MLModel(object):
                     break
                 else:
                     time.sleep(wait_time)
-            if(not hasattr(generator_output, '__len__')):
-                raise ValueError('Output of generator must be a tuple (x, y)')
-            
-            x, y = generator_output
-            outs = self.test_function(x, y)
-            new_outs = []
-            if not isinstance(outs, list):
-                outs = [outs]
-            for l, o in zip(out_labels, outs):
-                if(l == 'acc'):
-                    o = numpy.mean(o)
-                new_outs.append(o)
-            ret.append(new_outs)
 
+            if not hasattr(generator_output, '__len__'):
+                raise ValueError('output of generator should be '
+                                         'a tuple `(x, y)`. Found: ' +
+                                         str(generator_output))
+                                
+            if(len(generator_output) == 2):
+                x, y = generator_output
+            else:
+                raise ValueError('output of generator should be '
+                                         'a tuple `(x, y)`. Found: ' +
+                                         str(generator_output))
+                
+            outs = self.test_function(x, y)
+            
+            if(not isinstance(outs, list)):
+                outs = outs
             if(isinstance(x, list)):
                 batch_size = len(x[0])
             elif(isinstance(x, dict)):
-                batch_size = len(list(x.values())[0])
+                batch_size = len(list(x.value())[0])
             else:
                 batch_size = len(x)
+            all_outs.append(outs)
             
             steps_done += 1
             batch_sizes.append(batch_size)
-                
 
-        if enqueuer is not None:
+        if(enqueuer is not None):
             enqueuer.stop()
+        
+        averages = []
+        for i in range(len(outs)):
+            averages.append(numpy.average([out[i] for out in all_outs],
+                                          weights=batch_sizes))
+        return averages
                 
-        array = []
-        for i in range(len(out_labels)):
-            array.append(numpy.average([out[i] for out in ret], weights=batch_sizes))
-        return array
             
 
     def evaluate(self, x, y):
@@ -703,8 +707,8 @@ class MLModel(object):
             
         wait_time = 0.01
         epoch = initial_epoch
-        do_validation = bool(validation_data)
         
+        do_validation = bool(validation_data)
         self.make_train_function()
         if(do_validation):
             self.make_test_function()
@@ -760,6 +764,7 @@ class MLModel(object):
             epoch_start_time = time.time()
             while(steps_done < steps_per_epoch):
                 generator_output = None
+                
                 while(enqueuer.is_running()):
                     if(not enqueuer.queue.empty()):
                         generator_output = enqueuer.queue.get()
@@ -769,16 +774,14 @@ class MLModel(object):
                         
                 if not hasattr(generator_output, '__len__'):
                     raise ValueError('output of generator should be '
-                                         'a tuple `(x, y, sample_weight)` '
-                                         'or `(x, y)`. Found: ' +
+                                         'a tuple `(x, y)`. Found: ' +
                                          str(generator_output))
                                 
                 if(len(generator_output) == 2):
                     x, y = generator_output
                 else:
                     raise ValueError('output of generator should be '
-                                         'a tuple `(x, y, sample_weight)` '
-                                         'or `(x, y)`. Found: ' +
+                                         'a tuple `(x, y)`. Found: ' +
                                          str(generator_output))
                 
                 # build batch logs
@@ -797,7 +800,7 @@ class MLModel(object):
                     outs = [outs]
                 for l, o in zip(out_labels, outs):
                     if(l == 'acc'):
-                        train_accuracy.append(numpy.mean(o))
+                        train_accuracy.append(o)
                     else:
                         batch_logs[l] = o
                 epoch_loss += [batch_logs['loss']]
@@ -818,7 +821,6 @@ class MLModel(object):
                         
                     else:
                         val_outs = self.evaluate(val_x, val_y)
-                        print val_outs
                     
                     if(not isinstance(val_outs, list)):
                         val_outs = [val_outs]
@@ -829,8 +831,6 @@ class MLModel(object):
             epoch_logs['train_loss'] = numpy.mean(epoch_loss)
             if('acc' in out_labels):
                 epoch_logs['train_acc'] = numpy.mean(train_accuracy)
-                if(do_validation):
-                    epoch_logs['valid_acc'] = numpy.mean(epoch_logs['valid_acc'])
             epoch_logs['epoch_time'] = time.time() - epoch_start_time
             callbacks.epoch_end(epoch, epoch_logs)
             epoch += 1
@@ -926,8 +926,6 @@ class MLModel(object):
             epoch_logs['train_loss'] = numpy.mean(epoch_loss)
             if('acc' in out_labels):
                 epoch_logs['train_acc'] = numpy.mean(train_accuracy)
-                if(do_validation):
-                    epoch_logs['valid_acc'] = numpy.mean(epoch_logs['valid_acc'])
             epoch_logs['epoch_time'] = time.time() - epoch_start_time
             callbacks.epoch_end(epoch, epoch_logs)
         
@@ -998,7 +996,6 @@ class GeneratorEnqueuer(object):
                     else:
                         time.sleep(wait_time)
                 except Exception:
-                    print "Error thrown 1"
                     self._stop_event.set()
                     raise
         try:

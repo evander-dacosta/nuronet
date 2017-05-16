@@ -300,10 +300,7 @@ adadelta = Adadelta
 adam = Adam
             
 def get_optimiser(identifier, **kwargs):
-    #if K.backend() == 'tensorflow':
-        # Wrap TF optimizer instances
-        #if isinstance(identifier, tf.train.Optimizer):
-         #   return TFOptimizer(identifier)
-    # Instantiate a Keras optimizer
+    if(isinstance(identifier, Optimiser)):
+        return identifier
     return get_from_module(identifier, globals(), 'optimizer',
                            instantiate=True, **kwargs)
