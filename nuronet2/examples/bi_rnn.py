@@ -10,7 +10,9 @@ from nuronet2.layers import DenseLayer, RNNLayer, Merge
 
 
 if __name__ == "__main__":
-    data = MnistDataset(fName="/home/evander/Dropbox/data/mnist/mnist.pkl.gz",
+    #fName="/home/evander/Dropbox/data/mnist/mnist.pkl.gz"
+    fName="C:\\Users\\Evander\\Dropbox\\data\\mnist\\mnist.pkl.gz"
+    data = MnistDataset(fName=fName,
                         batch_size=32, flatten=False, limit=None)
     n_epochs = 30
 

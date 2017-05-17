@@ -223,3 +223,151 @@ class History(Callback):
         so we can evaluate bias and variance
         """
         return numpy.array(self.history['valid_loss'])
+        
+class Progbar(object):
+    def __init__(self, target, width=30, interval=0.05):
+        self.width = width
+        self.target = target
+        self.sum_values = {}
+        self.unique_values = []
+        self.start = time.time()
+        self.last_update = 0
+        self.interval = interval
+        self.total_width = 0
+        self.seen_so_far = 0
+        
+    def update(self, current, values=None, force=False):
+        """
+        current: Index of current step
+        values: list of tuples (name, value_for_last_step). Progressbar
+                will display averages for these values
+        force: Whether or not to force visual progress updates
+        """
+        values = values or []
+        for k, v in values:
+            if(k not in self.sum_values):
+                self.sum_values[k] = [v * (current - self.seen_so_far),
+                                     current - self.seen_so_far]
+                self.unique_values.append(k)
+            else:
+                self.sum_values[k][0] += (v*current - self.seen_so_far)
+                self.sum_values[k][1] += (current - self.seen_so_far)
+        self.seen_so_far = current
+        
+        now = time.time()
+        if not force and (now - self.last_update) < self.interval:
+            return
+
+        prev_total_width = self.total_width
+        sys.stdout.write('\b' * prev_total_width)
+        sys.stdout.write('\r')
+
+        numdigits = int(numpy.floor(numpy.log10(self.target))) + 1
+        barstr = '%%%dd/%%%dd [' % (numdigits, numdigits)
+        bar = barstr % (current, self.target)
+        prog = float(current) / self.target
+        prog_width = int(self.width * prog)
+        if prog_width > 0:
+            bar += ('=' * (prog_width - 1))
+            if current < self.target:
+                bar += '>'
+            else:
+                bar += '='
+        bar += ('.' * (self.width - prog_width))
+        bar += ']'
+        sys.stdout.write(bar)
+        self.total_width = len(bar)
+
+        if current:
+            time_per_unit = (now - self.start) / current
+        else:
+            time_per_unit = 0
+        eta = time_per_unit * (self.target - current)
+        info = ''
+        if current < self.target:
+            info += ' - ETA: %ds' % eta
+        else:
+            info += ' - %ds' % (now - self.start)
+        for k in self.unique_values:
+            info += ' - %s:' % k
+            if isinstance(self.sum_values[k], list):
+                avg = self.sum_values[k][0] / max(1, self.sum_values[k][1])
+                if abs(avg) > 1e-3:
+                    info += ' %.4f' % avg
+                else:
+                    info += ' %.4e' % avg
+            else:
+                info += ' %s' % self.sum_values[k]
+
+        self.total_width += len(info)
+        if prev_total_width > self.total_width:
+            info += ((prev_total_width - self.total_width) * ' ')
+
+        sys.stdout.write(info)
+        sys.stdout.flush()
+
+        if current >= self.target:
+            sys.stdout.write("\n")
+            
+    def add(self, n, values=None):
+        self.update(self.seen_so_far + n, values)
+        
+    def erase(self):
+        prev_total_width = self.total_width
+        sys.stdout.write('\b' * prev_total_width)
+        
+        
+
+"""class ProgressLogger(Callback):
+    def __init__(self, mode='samples'):
+        if(mode == 'samples'):
+            self.use_steps = False
+        elif(mode == 'steps'):
+            self.use_steps = True
+        else:
+            raise ValueError('Unknown mode {}'.format(mode))
+
+    def epoch_start(self, epoch, logs=None):
+        if(self.use_steps):
+            self.target = self.params['steps']
+        else:
+            self.target = self.params['samples']
+        self.progbar = Progbar(target=self.target)
+        self.seen = 0
+        
+    def epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        for k in self.params['metrics']:
+            train_label = 'train_'+k
+            valid_label = 'valid_'+k
+            if(k in logs):
+                self.log_values.append((k, logs[k]))
+            if(train_label in logs):
+                self.log_values.append((train_label, logs[train_label]))
+            if(valid_label in logs):
+                self.log_values.append((valid_label, logs[valid_label]))
+        self.progbar.update(self.seen, self.log_values, force=True)
+        self.progbar.erase()
+                
+        
+    def batch_start(self, batch, logs=None):
+        if(self.seen < self.target):
+            self.log_values = []
+
+    def batch_end(self, batch, logs=None):
+        logs = logs or {}
+        batch_size = logs.get('size', 0)
+        if(self.use_steps):
+            self.seen += 1
+        else:
+            self.seen += batch_size
+        
+        for k in self.params['metrics']:
+            if k in logs:
+                self.log_values.append((k, logs[k]))
+                
+        if(self.seen < self.target):
+            self.progbar.update(self.seen, self.log_values)
+
+    def train_start(self, logs=None):
+        self.epochs = self.params['n_epochs']"""

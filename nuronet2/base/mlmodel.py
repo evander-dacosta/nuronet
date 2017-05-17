@@ -724,6 +724,7 @@ class MLModel(object):
         callbacks = (callbacks or []) + [self.history]
         if(verbose):
             callbacks += [cbks.TrainLogger()]
+            #callbacks += [cbks.ProgressLogger(mode='samples')]
         callbacks = cbks.CallbackList(callbacks) 
         
         #make it possible to call callbacks from a different model
@@ -734,9 +735,11 @@ class MLModel(object):
             
         callbacks.set_model(callback_model)
         callbacks.set_params({
+            'steps': steps_per_epoch,
             'batch_size': generator.batch_size,
             'n_epochs': n_epochs,
-            'verbose': verbose
+            'verbose': verbose,
+            'metrics': self._get_output_metrics_names()
         })
         callbacks.train_start()
 
@@ -852,6 +855,7 @@ class MLModel(object):
         callbacks = (callbacks or []) + [self.history]
         if(verbose):
             callbacks += [cbks.TrainLogger()]
+            #callbacks += [cbks.ProgressLogger(mode='samples')]
         callbacks = cbks.CallbackList(callbacks)
         
         #make it possible to call callbacks from a different model
@@ -862,9 +866,11 @@ class MLModel(object):
         
         callbacks.set_model(callback_model)
         callbacks.set_params({
+            'samples' : dataset.n,
             'batch_size': dataset.batch_size,
             'n_epochs': n_epochs,
-            'verbose': verbose
+            'verbose': verbose,
+            'metrics': self._get_output_metrics_names()
         })
         callbacks.train_start()
         
