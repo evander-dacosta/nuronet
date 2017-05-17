@@ -314,6 +314,22 @@ class TensorflowBackend(Backend):
     def gather(self, x, indices):
         return tf.gather(x, indices)
         
+    def batch_normalization(self, x, mean, var, beta, gamma, epsilon=1e-3):
+        """Applies batch normalization on x given mean, var, beta and gamma.
+        I.e. returns:
+        `output = (x - mean) / (sqrt(var) + epsilon) * gamma + beta`
+        # Arguments
+            x: Input tensor or variable.
+            mean: Mean of batch.
+            var: Variance of batch.
+            beta: Tensor with which to center the input.
+            gamma: Tensor by which to scale the input.
+            epsilon: Fuzz factor.
+        # Returns
+            A tensor.
+        """
+        return tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon)
+        
     #ELEMWISE OPS
         
     def _axis(self, axis, ndim):
@@ -444,6 +460,50 @@ class TensorflowBackend(Backend):
         
     #RESHAPING OPS
         
+    def normalize_batch_in_training(self, x, gamma, beta,
+                                    reduction_axes, epsilon=1e-3):
+        """Computes mean and std for batch then apply batch_normalization on batch.
+        # Arguments
+            x: Input tensor or variable.
+            gamma: Tensor by which to scale the input.
+            beta: Tensor with which to center the input.
+            reduction_axes: iterable of integers,
+                axes over which to normalize.
+            epsilon: Fuzz factor.
+        # Returns
+            A tuple length of 3, `(normalized_tensor, mean, variance)`.
+        """
+        mean, var = tf.nn.moments(x, reduction_axes,
+                                  shift=None, name=None, keep_dims=False)
+        if sorted(reduction_axes) == list(range(self.ndim(x)))[:-1]:
+            normed = tf.nn.batch_normalization(x, mean, var,
+                                               beta, gamma,
+                                               epsilon)
+        else:
+            # need broadcasting
+            target_shape = []
+            for axis in range(self.ndim(x)):
+                if axis in reduction_axes:
+                    target_shape.append(1)
+                else:
+                    target_shape.append(tf.shape(x)[axis])
+            target_shape = tf.stack(target_shape)
+    
+            broadcast_mean = tf.reshape(mean, target_shape)
+            broadcast_var = tf.reshape(var, target_shape)
+            if gamma is None:
+                broadcast_gamma = None
+            else:
+                broadcast_gamma = tf.reshape(gamma, target_shape)
+            if beta is None:
+                broadcast_beta = None
+            else:
+                broadcast_beta = tf.reshape(beta, target_shape)
+            normed = tf.nn.batch_normalization(x, broadcast_mean, broadcast_var,
+                                               broadcast_beta, broadcast_gamma,
+                                               epsilon)
+        return normed, mean, var
+            
     def concat(self, tensors, axis=-1):
         if(axis < 0):
             rank = self.ndim(tensors[0])

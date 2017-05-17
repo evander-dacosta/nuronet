@@ -148,6 +148,42 @@ class TheanoBackend(Backend):
     def gather(self, x, indices):
         return x[indices]
         
+    def batch_normalization(self, x, mean, var, beta, gamma, epsilon=1e-3):
+        """Apply batch normalization on x given mean, var, beta and gamma.
+        """
+        if gamma is None:
+            gamma = self.ones_like(var)
+        if beta is None:
+            beta = self.zeros_like(mean)
+    
+        if mean.ndim == 1:
+            # based on TensorFlow's default: normalize along rightmost dimension
+            reduction_axes = list(range(x.ndim - 1))
+        else:
+            reduction_axes = [i for i in range(x.ndim) if mean.broadcastable[i]]
+    
+        return T.nnet.bn.batch_normalization_test(
+            x, gamma, beta, mean, var, reduction_axes, epsilon)
+            
+    def normalize_batch_in_training(self, x, gamma, beta,
+                                    reduction_axes, epsilon=1e-3):
+        """Computes mean and std for batch then apply batch_normalization on batch.
+        """
+        if gamma is None:
+            if beta is None:
+                gamma = self.ones_like(x)
+            else:
+                gamma = self.ones_like(beta)
+        if beta is None:
+            if gamma is None:
+                beta = self.zeros_like(x)
+            beta = self.zeros_like(gamma)
+    
+        normed, mean, stdinv = T.nnet.bn.batch_normalization_train(
+            x, gamma, beta, reduction_axes, epsilon)
+    
+        return normed, mean, T.inv(stdinv ** 2)
+        
     #ELEMWISE OPS
         
     def max(self, x, axis=None, keepdims=False):

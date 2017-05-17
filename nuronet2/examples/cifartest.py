@@ -21,7 +21,7 @@ if __name__ == "__main__":
     folderName='/home/evander/Dropbox/data/cifar-10'
 
     data = Cifar10Dataset(folderName, limit=5, flatten=False, 
-                          batch_size=32, validation=0.0001)
+                          batch_size=32, validation=0.001)
 
     net = NeuralNetwork()
     

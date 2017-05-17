@@ -919,6 +919,8 @@ class MLModel(object):
                     val_outs = [val_outs]
                     
                 for l, o in zip(out_labels, val_outs):
+                    if(l == 'acc'):
+                        o = numpy.mean(o)
                     epoch_logs['valid_'+l] = o
             
             
@@ -954,7 +956,10 @@ class MLModel(object):
         return input_shape
         
     def get_updates(self):
-        return OrderedDict()
+        return self.updates
+        
+    def add_update(self, update):
+        self.updates.append(update)
         
         
         
@@ -1016,7 +1021,6 @@ class GeneratorEnqueuer(object):
                 self._threads.append(thread)
                 thread.start()
         except:
-            print "Error Thrown 2"
             self.stop()
             raise
             
