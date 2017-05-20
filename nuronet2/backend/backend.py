@@ -262,6 +262,10 @@ class Backend(object):
         raise NotImplementedError()
         
     #NeuralNet OPS
+    def conv1d(self, x, kernel, strides=1, padding='valid',
+               dilation_rate=1):
+        raise NotImplementedError()
+
     def conv2d(self, x, kernel, strides=(1, 1), border_mode='valid',
                image_shape=None, filter_shape=None):
         raise NotImplementedError()

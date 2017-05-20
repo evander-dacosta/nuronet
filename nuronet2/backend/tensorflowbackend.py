@@ -519,6 +519,9 @@ class TensorflowBackend(Backend):
     def expand_dim(self, x, dim=-1):
         return tf.expand_dims(x, dim)
         
+    def squeeze(self, x, axis):
+        return tf.squeeze(x, [axis])
+        
     def dimshuffle(self, x, pattern):
         return tf.transpose(x, perm=pattern)
         
@@ -660,29 +663,81 @@ class TensorflowBackend(Backend):
         if(self._default_dtype == "float64"):
             x = tf.cast(x, 'float64')
         return x
+        
+    def temporal_padding(self, x, padding=(1, 1)):
+        """Pads the middle dimension of a 3D tensor.
+        # Arguments
+            x: Tensor or variable.
+            padding: Tuple of 2 integers, how many zeros to
+                add at the start and end of dim 1.
+        # Returns
+            A padded 3D tensor.
+        """
+        assert len(padding) == 2
+        pattern = [[0, 0], [padding[0], padding[1]], [0, 0]]
+        return tf.pad(x, pattern)
+        
+    def conv1d(self, x, kernel, strides=1, padding='valid',
+               dilation_rate=1):
+        kernel_shape = kernel.get_shape().as_list()
+        if(padding == 'causal'):
+            left_pad = dilation_rate * (kernel_shape[0] - 1)
+            x = self.temporal_padding(x, (left_pad, 0))
+            padding = 'valid'
+        
+        if(padding == 'same'):
+            padding = 'SAME'
+        elif(padding == 'valid'):
+            padding = 'VALID'
+        else:
+            raise ValueError('Invalid padding')
+        
+        x = tf.nn.convolution(input=x,
+                              filter=kernel,
+                              dilation_rate=(dilation_rate,),
+                                strides=(strides,),
+                              padding=padding,
+                              data_format='NCW')
+        return x
 
-    def conv2d(self, x, kernel, strides=(1, 1), border_mode='valid',
-               image_shape=None, filter_shape=None):
+    def conv2d(self, x, kernel, strides=(1, 1), padding='valid',
+               dilation_rate=(1, 1)):
         x = self._pre_conv2d_input(x, 'th')
         kernel = self._pre_conv2d_kernel(kernel, 'th')
-        padding = self._pre_bordermode(border_mode)
-        strides = (1,) + strides  + (1,)
-        x = tf.nn.conv2d(x, kernel, strides, padding=padding)
+        if(padding == 'same'):
+            padding = 'SAME'
+        elif(padding == 'valid'):
+            padding = 'VALID'
+        else:
+            raise ValueError('Invalid padding')
+        
+        x = tf.nn.convolution(
+                              input=x,
+                              filter=kernel,
+                              dilation_rate=dilation_rate,
+                              strides=strides,
+                              padding=padding,
+                              data_format='NHWC')
         return self._post_conv2d_output(x, 'th')
         
-    def pool2d(self, x, pool_size, strides=(1, 1), padding=(0, 0),
-               ignore_border=False,
+    def pool2d(self, x, pool_size, strides=(1, 1), padding='valid',
                pool_mode='max'):
-        padding = self._pre_bordermode('valid')
-        strides = (1,) + strides + (1,)
-        pool_size = (1,) + pool_size + (1,)
+        if(padding == 'same'):
+            padding = 'SAME'
+        elif(padding == 'valid'):
+            padding = 'VALID'
+        else:
+            raise ValueError('Invalid padding')
+            
+        strides = (1, ) + strides + (1, )
+        pool_size = (1, ) + pool_size + (1, )
         x = self._pre_conv2d_input(x, 'th')
         if(pool_mode == 'max'):
             x = tf.nn.max_pool(x, pool_size, strides, padding=padding)
         elif(pool_mode == 'avg'):
             x = tf.nn.avg_pool(x, pool_size, strides, padding=padding)
         else:
-            raise Exception("Invalid pool mode: {}".format(pool_mode))
+            raise ValueError("Unknown pool_mode {}".format(pool_mode))
         return self._post_conv2d_output(x, 'th')
         
     def reverse(self, x, axes):

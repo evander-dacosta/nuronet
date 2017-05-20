@@ -285,6 +285,16 @@ class TheanoBackend(Backend):
         pattern.insert(dim, 'x')
         return x.dimshuffle(pattern)
         
+    def squeeze(x, axis):
+        shape = list(x.shape)
+        shape.pop(axis)
+        y = T.reshape(x, tuple(shape))
+        if(hasattr(x, '_nuro_shape')):
+            n_shape = list(x._nuro_shape)
+            n_shape.pop(axis)
+            y._nuro_shape = tuple(n_shape)
+        return y
+        
     def dimshuffle(self, x, pattern):
         pattern = tuple(pattern)
         return x.dimshuffle(pattern)
@@ -379,48 +389,137 @@ class TheanoBackend(Backend):
         
         
     #NEURAL NETWORK OPS
-    def conv2d(self, x, kernel, strides=(1, 1), border_mode='valid',
-               image_shape=None, filter_shape=None):
-        if(border_mode not in ('valid', 'full')):
-            raise Exception("Border mode not supported:{}".format(border_mode))
+    def temporal_padding(self, x, padding=(1, 1)):
+        """
+        Pad the middle dimension of a 3D tensor with 'padding' zeros
+        to the left and right
+        """
+        assert(len(padding == 2))
+        input_shape = x.shape
+        output_shape = (input_shape[0],
+                        input_shape[1] + padding[0] + padding[1],
+                        input_shape[2])
+        output = T.zeros(output_shape)
+        result = T.set_subtensor(output[:, padding[0]:x.shape[1] + padding[0], :], x)
+        if(hasattr(x, '_nuro_shape')):
+            result._nuro_shape = (x._nuro_shape[0],
+                                  x._nuro_shape[1] + sum(padding),
+                                  x._nuro_shape[2])
+        return result
+
+    def conv1d(self, x, kernel, strides=1, padding='valid',
+               dilation_rate=1):
+        if(hasattr(kernel, '_nuro_shape')):
+            kernel_shape = kernel._nuro_shape
+        else:
+            kernel_shape = None
+        if(padding == 'causal'):
+            if(not kernel_shape):
+                raise AttributeError('Causal padding requires kernel._nuro_shape')
+            left_pad = dilation_rate * (kernel_shape[0] - 1)
+            x = self.temporal_padding(x, (left_pad, 0))
+            padding = 'valid'
+        if(hasattr(x, '_nuro_shape')):
+            shape = x._nuro_shape
+        else:
+            shape = None
+            
+        # Original shape: (batch, input_dim, length)
+        # New shape: (batch, input_dim, length, 1)
+        x = self.expand_dim(x, 3)
+        if(shape is not None):
+            x._nuro_shape = (shape[0], shape[1], shape[2], 1)
         
-        def int_else_none(value):
+        dilation_rate = (dilation_rate, 1)
+        strides = (strides, 1)
+        kernel = self.expand_dim(kernel, 1)
+        output = self.conv2d(x, kernel, strides=strides, padding=padding,
+                             dilation_rate=dilation_rate)
+        output = self.squeeze(output, 3)
+        return output
+        
+    def _pre_conv2d_shape(self, image_shape):
+        def int_or_none(value):
             try:
                 return int(value)
             except TypeError:
                 return None
-                
+            
         if(image_shape is not None):
-            image_shape = tuple(int_else_none(v) for v in image_shape)
-            
-        if(filter_shape is not None):
-            filter_shape = tuple(int_else_none(v) for v in filter_shape)
-            
-        out = T.nnet.conv2d(x, kernel, border_mode=border_mode,
-                            subsample=strides,
-                            input_shape=image_shape,
-                            filter_shape=filter_shape)
-        return out
+            image_shape = tuple(int_or_none(v) for v in image_shape)
+        return image_shape
         
-        
-    def pool2d(self, x, pool_size, strides=(1, 1), padding=(0, 0),
-               ignore_border=False,
-               pool_mode='max'):
-        if(pool_mode not in ('max', 'avg')):
-            raise Exception("Unknown pool_mode" + \
-            ":{}. Required 'avg' or 'max'".format(pool_mode))
-        if(pool_mode == 'max'):
-            poolOut = pool.pool_2d(x, ds=pool_size, st=strides,
-                                   ignore_border=ignore_border,
-                                   padding=padding,
-                                    mode='max')
+    def _post_conv2d_output(self, conv_out, x, 
+                            padding, kernel_shape, strides):
+        if(padding == 'same'):
+            if(kernel_shape[2] % 2 == 0):
+                conv_out = conv_out[:, :, :(x.shape[2] + strides[0] - 1)//strides[0], :]
+            if(kernel_shape[3] % 2 == 0):
+                conv_out = conv_out[:, :, :, :(x.shape[3] + strides[1] - 1)//strides[1]]
+        return conv_out
+    
+    def conv2d(self, x, kernel, strides=(1, 1), padding='valid',
+               dilation_rate=(1, 1)):
+        if(hasattr(x, '_nuro_shape')):
+            image_shape = self._pre_conv2d_shape(self.int_shape(x))
         else:
-            poolOut = pool.pool_2d(x, ds=pool_size, st=strides,
-                                   ignore_border=ignore_border,
-                                   padding=padding, 
-                                   mode='average_exc_pad')
-                                   
-        return poolOut
+            image_shape = None
+        if(hasattr(kernel,  '_nuro_shape')):
+            kernel_shape = kernel._nuro_shape
+        else:
+            kernel_shape = kernel.eval().shape
+        kernel_shape = self._pre_conv2d_shape(kernel_shape)
+        
+        if(padding == 'same'):
+            th_padding = 'half'
+        elif(padding == 'valid'):
+            th_padding = 'valid'
+        elif(padding == 'full'):
+            th_padding = 'full'
+        else:
+            raise ValueError('Unknown padding type {}'.format(padding))
+        
+        conv_out = T.nnet.conv2d(x, kernel, border_mode=th_padding,
+                                 subsample=strides, input_shape=image_shape,
+                                 filter_shape=kernel_shape, 
+                                 filter_dilation=dilation_rate)
+        conv_out = self._post_conv2d_output(conv_out, x, padding,
+                                            kernel_shape, strides)
+        return conv_out
+        
+    def pool2d(self, x, pool_size, strides=(1, 1), padding='valid',
+               pool_mode='max'):
+        assert(pool_size[0] >= 1 and pool_size[1] >= 1)
+        
+        if(padding == 'same'):
+            w_pad = pool_size[0] - 2 if pool_size[0] > 2 and pool_size[0] % 2 == 1 else pool_size[0] - 1
+            h_pad = pool_size[1] - 2 if pool_size[1] > 2 and pool_size[1] % 2 == 1 else pool_size[1] - 1
+            pad = (w_pad, h_pad)
+        elif(padding  == 'valid'):
+            pad = (0, 0)
+        else:
+            raise ValueError('Unknown padding type {}'.format(padding))
+            
+        if(pool_mode == 'max'):
+            pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
+                                    ignore_border=True, pad=pad,
+                                    mode='max')
+        elif(pool_mode == 'avg'):
+            if(padding == 'same'):
+                avg_pool_mode = 'average_inc_pad'
+            elif(padding == 'valid'):
+                avg_pool_mode = 'average_exc_pad'
+            pool_out = pool.pool_2d(x, ws=pool_size, stride=strides,
+                                    ignore_border=True, pad=pad,
+                                    mode=avg_pool_mode)
+        else:
+            raise ValueError('Unknown pool_mode {}'.format(pool_mode))
+        
+        if(padding == 'same'):
+            expected_width = (x.shape[2] + strides[0] - 1) // strides[0]
+            expected_height = (x.shape[3] + strides[1] - 1) // strides[1]
+            pool_out = pool_out[:, :, : expected_width, : expected_height]
+        return pool_out
 
     def recurrence(self, step_function, inputs, initial_states,
             unroll=False,
