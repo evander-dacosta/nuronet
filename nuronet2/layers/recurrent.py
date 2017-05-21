@@ -447,5 +447,65 @@ class GRULayer(Recurrent):
         
         h = (z*h_tm1) + ((1 - z)*hh)
         return h, [h]
+        
+        
+        
+class TemporalDense(Recurrent):
+    """
+    Acts as a dense layer that goes across 
+    a 3D input without any hidden interconnections in between.
+    
+    See the first layer of 'Deep Speech 2' for functionality example.
+    """
+    def __init__(self, n, weight_factory='xavier_uniform',
+                 activation='tanh',
+                 w_regulariser=None, b_regulariser=None,
+                 w_dropout=0.,**kwargs):
+        self.n = n
+        self.w_factory = get_weightfactory(weight_factory)
+        self.activation = get_activation(activation)
+        self.w_regulariser = get_regulariser(w_regulariser)
+        self.b_regulariser = get_regulariser(b_regulariser)
+        self.dropout_w = min(1., max(0., w_dropout))
+        Recurrent.__init__(self, **kwargs)
+        
+    def build(self, input_shape):
+        self.input_dim = input_shape[2]
+        
+        self.W = self.w_factory(shape=(self.input_dim, self.n))
+        self.b = N.zeros(shape=(self.n,))
+        self.trainable_weights = [self.W, self.b]
+        self.states = [None]
+        self.built = True
+        
+    def preprocess(self, x):
+        return x
+        
+    def get_cost(self):
+        w_cost =  self.w_regulariser(self.W) if self.w_regulariser else N.cast(0.)
+        b_cost = self.b_regulariser(self.b) if self.b_regulariser else N.cast(0.)
+        return w_cost + b_cost
+
+    def _step(self, x, states):
+        B_W = states[1]
+        h = N.dot(x * B_W, self.W) + self.b
+        output = self.activation(h)
+        return output, [output]
+        
+    def get_constants(self, x):
+        constants = []
+        if(0 < self.dropout_w < 1):
+            input_shape = N.int_shape(x)
+            input_dim = input_shape[-1]
+            ones = N.ones_like(N.reshape(x[:, 0, 0], (-1, 1)))
+            ones = N.tile(ones, (1, int(input_dim)))
+            if(self.is_training):
+                B_W = N.dropout(ones, self.dropout_w)
+            else:
+                B_W = ones
+            constants.append(B_W)
+        else:
+            constants.append(numpy.asarray(1., dtype=N.floatx))
+        return constants
 if __name__ == "__main__":
     r = Recurrent(input_dim=3)

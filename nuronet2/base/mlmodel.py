@@ -803,7 +803,7 @@ class MLModel(object):
                     outs = [outs]
                 for l, o in zip(out_labels, outs):
                     if(l == 'acc'):
-                        train_accuracy.append(o)
+                        train_accuracy.append(numpy.mean(o))
                     else:
                         batch_logs[l] = o
                 epoch_loss += [batch_logs['loss']]

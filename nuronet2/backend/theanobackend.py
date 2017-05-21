@@ -283,9 +283,14 @@ class TheanoBackend(Backend):
             else:
                 dim = dim % x.type.ndim + 1
         pattern.insert(dim, 'x')
-        return x.dimshuffle(pattern)
+        y = x.dimshuffle(pattern)
+        if(hasattr(x, '_nuro_shape')):
+            shape = list(x._nuro_shape)
+            shape.insert(dim, 1)
+            y._nuro_shape = tuple(shape)
+        return y
         
-    def squeeze(x, axis):
+    def squeeze(self, x, axis):
         shape = list(x.shape)
         shape.pop(axis)
         y = T.reshape(x, tuple(shape))
@@ -394,7 +399,7 @@ class TheanoBackend(Backend):
         Pad the middle dimension of a 3D tensor with 'padding' zeros
         to the left and right
         """
-        assert(len(padding == 2))
+        assert(len(padding) == 2)
         input_shape = x.shape
         output_shape = (input_shape[0],
                         input_shape[1] + padding[0] + padding[1],
@@ -412,7 +417,7 @@ class TheanoBackend(Backend):
         if(hasattr(kernel, '_nuro_shape')):
             kernel_shape = kernel._nuro_shape
         else:
-            kernel_shape = None
+            kernel_shape = self.shape(kernel)
         if(padding == 'causal'):
             if(not kernel_shape):
                 raise AttributeError('Causal padding requires kernel._nuro_shape')
@@ -432,7 +437,7 @@ class TheanoBackend(Backend):
         
         dilation_rate = (dilation_rate, 1)
         strides = (strides, 1)
-        kernel = self.expand_dim(kernel, 1)
+        kernel = self.expand_dim(kernel, 3)
         output = self.conv2d(x, kernel, strides=strides, padding=padding,
                              dilation_rate=dilation_rate)
         output = self.squeeze(output, 3)

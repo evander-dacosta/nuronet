@@ -19,7 +19,7 @@ we use net.fit_generator() to train
         
 if __name__ == "__main__":
     folderName='/home/evander/Dropbox/data/cifar-10'
-
+    folderName = "C:\\Users\\Evander\\Dropbox\\data\\cifar-10"
     data = Cifar10Dataset(folderName, limit=5, flatten=False, 
                           batch_size=32, validation=0.001)
 
@@ -27,12 +27,12 @@ if __name__ == "__main__":
     
     net.add(Conv2dLayer((32, 3, 3), activation="relu", input_shape=(3, 32, 32)))
     net.add(Conv2dLayer((32, 3, 3), activation="relu"))
-    net.add(Maxpool2d(pool_size=(2, 2), strides=(1, 1)))
+    net.add(MaxPooling2d(pool_size=(2, 2), strides=(1, 1)))
     net.add(Dropout(0.25))
     
     net.add(Conv2dLayer((64, 3, 3), activation="relu"))
     net.add(Conv2dLayer((64, 3, 3), activation="relu"))
-    net.add(Maxpool2d(pool_size=(2, 2), strides=(1, 1)))
+    net.add(MaxPooling2d(pool_size=(2, 2), strides=(1, 1)))
     net.add(Dropout(0.25))
     
     net.add(Flatten())
@@ -41,8 +41,8 @@ if __name__ == "__main__":
     net.add(DenseLayer(10, activation="softmax"))
     
     
-    net.compile('adam', 'categorical_crossentropy', metrics=['accuracy'])
-    history = net.fit_dataset(data, 20)
+    """net.compile('adam', 'categorical_crossentropy', metrics=['accuracy'])
+    history = net.fit_dataset(data, 20)"""
     
     """net.load_weights("cifarNet")
     yPred = net.predict

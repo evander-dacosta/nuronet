@@ -639,6 +639,17 @@ class TensorflowBackend(Backend):
             x = tf.transpose(x, (0, 2, 3, 1))
         return x
         
+    def _pre_conv1d_input(self, x, dim_ordering):
+        if(self._default_dtype == 'float64'):
+            x = tf.cast(x, 'float32')
+        if(dim_ordering == 'th'):
+            #TF uses the last dimension as the channel dimension
+            #instead of the second one
+            #theano input shape (samples, input_depth, rows)
+            #TF input shape (samples, rows, depth)
+            x = tf.transpose(x, (0, 2, 1))
+        return x
+        
     def _pre_conv2d_kernel(self, kernel, dim_ordering):
         if(self._default_dtype == 'float64'):
             kernel = tf.cast(kernel, 'float32')
@@ -646,6 +657,15 @@ class TensorflowBackend(Backend):
             #Theano kernel ordering (depth, input_depth, rows, cols)
             #TF kernel ordering (rows, cols, input_depth, depth)
             kernel = tf.transpose(kernel, (2, 3, 1, 0))
+        return kernel
+        
+    def _pre_conv1d_kernel(self, kernel, dim_ordering):
+        if(self._default_dtype == 'float64'):
+            kernel = tf.cast(kernel, 'float32')
+        if(dim_ordering == 'th'):
+            #Theano kernel ordering (depth, input_depth, rows)
+            #TF kernel ordering (rows, input_depth, depth)
+            kernel = tf.transpose(kernel, (2, 1, 0))
         return kernel
         
     def _pre_bordermode(self, border_mode):
@@ -679,6 +699,8 @@ class TensorflowBackend(Backend):
         
     def conv1d(self, x, kernel, strides=1, padding='valid',
                dilation_rate=1):
+        
+        kernel = self._pre_conv1d_kernel(kernel, 'th')
         kernel_shape = kernel.get_shape().as_list()
         if(padding == 'causal'):
             left_pad = dilation_rate * (kernel_shape[0] - 1)

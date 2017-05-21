@@ -200,7 +200,6 @@ class Conv(Layer):
                                dilation_rate=self.dilation_rate)
         # Reserved for 3d convolutions
         """if(self.rank == 3)"""
-        
         outputs = self.add_bias(outputs, self.bias)
         return self.activation(outputs)
     
@@ -243,3 +242,42 @@ class Conv2dLayer(Conv):
                                     kernel_factory=kernel_factory, bias_factory=bias_factory,
                                     kernel_regulariser=kernel_regulariser,
                                     bias_regulariser=bias_regulariser, **kwargs)
+                                    
+                                    
+class Conv1dLayer(Conv):
+    def __init__(self, n,
+                 strides=1,
+                 padding='valid',
+                 dilation_rate=1,
+                 activation='relu',
+                 kernel_factory="xavier_uniform",
+                 kernel_regulariser=None,                 
+                 bias_factory='zeros',
+                 bias_regulariser=None, **kwargs):
+        
+        filters = n[0]
+        kernel_size = n[1]        
+        super(Conv1dLayer, self).__init__(rank=1,
+                                          filters=filters,
+                                          kernel_size=kernel_size,
+                                          strides=strides,
+                                          padding=padding,
+                                          dilation_rate=dilation_rate,
+                                          activation=activation,
+                                          kernel_factory=kernel_factory,
+                                          kernel_regulariser=kernel_regulariser,
+                                          bias_factory=bias_factory,
+                                          bias_regulariser=bias_regulariser,
+                                          **kwargs)
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
