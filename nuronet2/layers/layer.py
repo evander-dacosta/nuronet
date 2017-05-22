@@ -5,6 +5,7 @@ Created on Thu Nov 17 00:36:57 2016
 @author: evander
 """
 import numpy
+import copy
 from nuronet2.base import InputDetail
 from nuronet2.activations import get_activation
 from nuronet2.backend import N
@@ -86,6 +87,28 @@ class Flatten(Layer):
         return (input_shape[0], numpy.prod(input_shape[1:]))
 
 
+class Permute(Layer):
+    def __init__(self, dims, **kwargs):
+        super(Permute, self).__init__(**kwargs)
+        self.dims = tuple(dims)
+        
+    def prop_up(self, inputs):
+        return N.permute_dimensions(inputs, (0,) + self.dims)
+        
+    def build(self, input_shape):
+        self.is_built = True
+        
+    def get_cost(self):
+        return N.cast(0.)
+        
+    def get_output_shape(self, input_shape):
+        input_shape = list(input_shape)
+        output_shape = copy.copy(input_shape)
+        for i, dim in enumerate(self.dims):
+            target_dim = input_shape[dim]
+            output_shape[i+1]=target_dim
+        return tuple(output_shape)
+        
 
 class Activation(Layer):
     def __init__(self, activation, **kwargs):

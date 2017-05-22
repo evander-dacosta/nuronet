@@ -272,8 +272,79 @@ class Conv1dLayer(Conv):
         
         
         
+class ConvDenseLayer(Layer):
+    """
+    A dense layer that immediately follows a distributed 
+    convolution without any flattening.
+    
+    See the first layers of 'Deep Speech 2' for functionality
+    """
+    def __init__(self, n, weight_factory='xavier_uniform',
+                 activation='linear', weights=None, w_regulariser=None,
+                 b_regulariser=None, input_shape=None,
+                 **kwargs):
+        self.weightFactory = get_weightfactory(weight_factory)
+        self.activation = get_activation(activation)
+        self.w_regulariser = get_regulariser(w_regulariser)
+        self.b_regulariser = get_regulariser(b_regulariser)
+        
+        if(input_shape is not None):
+            self.input_dim = input_shape[1]
+        else:
+            self.input_dim = None
+        
+        self.n = n
+        if(input_shape is not None):
+            kwargs['input_shape'] = input_shape
+        Layer.__init__(self, **kwargs)
         
         
+    def build(self, input_shape):
+        if(len(input_shape) != 3):
+            raise ValueError("ConvDenseLayer is currently "
+                             "only implemented for sitting "
+                             "above Conv1dLayers.")
+        input_dim = input_shape[1]
+        self.W = self.weightFactory(shape=(input_dim, self.n))
+        self.b = N.zeros(shape=(self.n,))
+        self.trainable_weights = [self.W, self.b]
+        self.is_built = True
+        
+    def prop_up(self, inputs):
+        input_shape = N.int_shape(inputs)
+        if(input_shape[0]):
+            def step(x, _):
+                output = self.activation(N.dot(x, self.W) + self.b)
+                return output, []
+            
+            _, outputs, _ = N.rnn(step, inputs,
+                                  initial_states=[],
+                                  input_length=input_shape[1],
+                                  unroll=False)
+            y = outputs
+        else:
+            input_length = input_shape[-1]
+            if(not input_length):
+                input_length = N.shape(inputs)[-1]
+            inputs = N.reshape(inputs, (-1, input_shape[1]))
+            y = self.activation(N.dot(inputs, self.W) + self.b)
+            y = N.reshape(y, (-1, self.n, input_length))
+        return y
+                
+    
+    def get_cost(self):
+        w_cost =  self.w_regulariser(self.W) if self.w_regulariser else N.cast(0.)
+        b_cost = self.b_regulariser(self.b) if self.b_regulariser else N.cast(0.)
+        return w_cost + b_cost
+            
+    def get_output_shape(self, input_shape):
+        assert input_shape and isinstance(input_shape, tuple)
+        assert len(input_shape) >= 3
+        if(self.input_dim):
+             assert input_shape[1] == self.input_dim
+        output_shape = list(input_shape)
+        output_shape[1] = self.n
+        return tuple(output_shape)
         
         
         

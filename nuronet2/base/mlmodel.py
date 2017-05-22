@@ -881,13 +881,19 @@ class MLModel(object):
         #get output labels
         out_labels = self._get_output_metrics_names()
         
+        # Calling validation split only once!
+        dataset.make_validation_splits()
         for epoch in range(initial_epoch, n_epochs):
             callbacks.epoch_start(epoch)
             epoch_start_time = time.time()
             epoch_logs = {}
             
             #Make the generator generate indices for training and validation
-            dataset.make_validation_splits()
+            # THIS IS WRONG! Cross-Validation doesn't holdout a subset per epoch
+            # It holds out a subset for k different models!!!
+            # We should only be calling make_validation_splits() ONCE!!
+            # Moved to top 
+            #dataset.make_validation_splits()
             
             #iterate over batches
             batch_index = 0

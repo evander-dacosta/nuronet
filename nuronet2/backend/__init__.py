@@ -6,7 +6,7 @@ TODO: Find a way to import the default backend N from config files or
       some crazy initial setup
 """
 flags = ['use_theano', 'use_tensorflow']
-flag = 'use_theano'
+flag = 'use_tensorflow'
 N = None
 
 def use_theano():

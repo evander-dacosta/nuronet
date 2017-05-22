@@ -9,12 +9,12 @@ from nuronet2.layers import DenseLayer, RNNLayer
 
 
 if __name__ == "__main__":
-    #fName="/home/evander/Dropbox/data/mnist/mnist.pkl.gz"
-    fName="C:\\Users\\Evander\\Dropbox\\data\\mnist\\mnist.pkl.gz"
+    fName="/home/evander/Dropbox/data/mnist/mnist.pkl.gz"
+    #fName="C:\\Users\\Evander\\Dropbox\\data\\mnist\\mnist.pkl.gz"
     data = MnistDataset(fName=fName,
                         batch_size=32, flatten=False, limit=None)
 
-    n_epochs = 30
+    n_epochs = 50
     model = NeuralNetwork()
     model.add(RNNLayer(64, return_sequences=False, input_shape=(28, 28),
                        go_backwards=True, w_dropout=0.2))
