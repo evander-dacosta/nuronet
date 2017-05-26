@@ -620,7 +620,9 @@ class MLModel(object):
                                          str(generator_output))
                 
             outs = self.test_function(x, y)
-            
+            for i, out in enumerate(outs):
+                if(isinstance(out, numpy.ndarray)):
+                    outs[i] = numpy.mean(out)
             if(not isinstance(outs, list)):
                 outs = outs
             if(isinstance(x, list)):
@@ -630,7 +632,7 @@ class MLModel(object):
             else:
                 batch_size = len(x)
             all_outs.append(outs)
-            
+
             steps_done += 1
             batch_sizes.append(batch_size)
 
@@ -774,7 +776,7 @@ class MLModel(object):
                         break
                     else:
                         time.sleep(wait_time)
-                        
+
                 if not hasattr(generator_output, '__len__'):
                     raise ValueError('output of generator should be '
                                          'a tuple `(x, y)`. Found: ' +
